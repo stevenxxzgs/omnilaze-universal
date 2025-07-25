@@ -1,0 +1,20 @@
+/* 移除所有输入框的焦点边框 */
+input:focus,
+textarea:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 移除React Native Web生成的输入框焦点样式 */
+[data-focusable="true"]:focus,
+[contenteditable="true"]:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 移除所有可聚焦元素的默认焦点样式 */
+*:focus {
+  outline: none !important;
+}

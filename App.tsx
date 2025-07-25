@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,6 +9,9 @@ import {
   View,
   Animated,
 } from 'react-native';
+
+// 导入全局CSS样式来移除焦点边框
+import './src/styles/global.css';
 
 // Components
 import { ProgressSteps } from './src/components/ProgressSteps';
@@ -52,10 +55,8 @@ export default function LemonadeApp() {
   // Custom hooks
   const { displayedText, isTyping, showCursor, typeText, setDisplayedText } = useTypewriterEffect();
   const { inputError, validateInput, validatePhoneNumber, setInputError } = useValidation();
-  const { scrollViewRef, contentHeight, handleScrollAfterAnswer } = useScrollCalculation(
-    completedAnswers, 
-    STEP_CONTENT
-  );
+  const scrollViewRef = useRef<any>(null);
+  const [contentHeight, setContentHeight] = useState(800);
   const { 
     questionAnimations,
     answerAnimations, 
@@ -70,7 +71,8 @@ export default function LemonadeApp() {
 
   // Effects
   useEffect(() => {
-    if (currentStep < STEP_CONTENT.length && !completedAnswers[currentStep] && editingStep === null) {
+    // 只在非编辑模式下触发打字机效果
+    if (editingStep === null && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
       inputSectionAnimation.setValue(0);
       currentQuestionAnimation.setValue(1);
       
@@ -80,7 +82,7 @@ export default function LemonadeApp() {
     }
   }, [currentStep, completedAnswers, editingStep]);
 
-  // Handle editing mode - skip typewriter effect
+  // Handle editing mode - skip typewriter effect and set up immediately
   useEffect(() => {
     if (editingStep !== null) {
       const stepData = STEP_CONTENT[editingStep];
@@ -90,8 +92,9 @@ export default function LemonadeApp() {
     }
   }, [editingStep]);
 
+  // Only trigger input animation in normal mode, not during editing
   useEffect(() => {
-    if (displayedText && !isTyping) {
+    if (editingStep === null && displayedText && !isTyping) {
       setTimeout(() => {
         Animated.spring(inputSectionAnimation, {
           toValue: 1,
@@ -101,13 +104,15 @@ export default function LemonadeApp() {
         }).start();
       }, TIMING.ANIMATION_DELAY);
     }
-  }, [displayedText, isTyping]);
+  }, [displayedText, isTyping, editingStep]);
 
   // Helper functions
   const getCurrentStepData = () => STEP_CONTENT[currentStep];
 
   const getCurrentAnswer = (): Answer | null => {
-    switch (currentStep) {
+    // 编辑模式下使用编辑步骤，否则使用当前步骤
+    const stepToUse = editingStep !== null ? editingStep : currentStep;
+    switch (stepToUse) {
       case 0: return { type: 'address', value: address };
       case 1: return { type: 'phone', value: phoneNumber };
       case 2: return { type: 'budget', value: budget };
@@ -208,8 +213,6 @@ export default function LemonadeApp() {
       friction: 8,
       useNativeDriver: true,
     }).start(() => {
-      handleScrollAfterAnswer();
-      
       setTimeout(() => {
         if (currentStep < STEP_CONTENT.length - 1) {
           setCurrentStep(currentStep + 1);
@@ -245,6 +248,9 @@ export default function LemonadeApp() {
     switch (answerToEdit.type) {
       case 'address':
         setAddress(answerToEdit.value);
+        setIsAddressConfirmed(false);
+        setShowMap(false);
+        mapAnimation.setValue(0);
         break;
       case 'phone':
         setPhoneNumber(answerToEdit.value);
@@ -260,24 +266,8 @@ export default function LemonadeApp() {
         break;
     }
     
-    // 暂时移除当前编辑的答案（但保留其他答案）
-    const newCompletedAnswers = { ...completedAnswers };
-    delete newCompletedAnswers[stepIndex];
-    setCompletedAnswers(newCompletedAnswers);
-    
-    // 重置对应步骤的动画
-    answerAnimations[stepIndex].setValue(0);
-    
-    // 设置编辑模式
+    // 设置编辑模式（最后设置以避免useEffect冲突）
     setEditingStep(stepIndex);
-    setCurrentStep(stepIndex);
-    
-    // 特殊处理地址步骤
-    if (stepIndex === 0) {
-      setIsAddressConfirmed(false);
-      setShowMap(false);
-      mapAnimation.setValue(0);
-    }
   };
 
   const handleFinishEditing = () => {
@@ -295,14 +285,6 @@ export default function LemonadeApp() {
         [editingStep]: currentAnswer
       }));
       
-      // 播放答案出现动画
-      Animated.spring(answerAnimations[editingStep], {
-        toValue: 1,
-        tension: 60,
-        friction: 8,
-        useNativeDriver: true,
-      }).start();
-      
       // 特殊处理地址步骤
       if (editingStep === 0) {
         setIsAddressConfirmed(true);
@@ -317,39 +299,36 @@ export default function LemonadeApp() {
       // 退出编辑模式
       setEditingStep(null);
       setOriginalAnswerBeforeEdit(null);
-      
-      // 返回到最新的未完成步骤
-      const allSteps = Object.keys(completedAnswers).map(Number).concat([editingStep]);
-      const maxStep = Math.max(...allSteps);
-      setCurrentStep(Math.min(maxStep + 1, STEP_CONTENT.length - 1));
     }
   };
 
   const handleCancelEditing = () => {
     if (editingStep !== null && originalAnswerBeforeEdit) {
-      // 恢复原始答案到completedAnswers
-      setCompletedAnswers(prev => ({
-        ...prev,
-        [editingStep]: originalAnswerBeforeEdit
-      }));
-      
-      // 恢复答案动画
-      answerAnimations[editingStep].setValue(1);
-      
-      // 特殊处理地址步骤的状态恢复
-      if (editingStep === 0) {
-        setIsAddressConfirmed(true);
-        setShowMap(true);
-        mapAnimation.setValue(1);
+      // 恢复原始答案的输入值
+      switch (originalAnswerBeforeEdit.type) {
+        case 'address':
+          setAddress(originalAnswerBeforeEdit.value);
+          setIsAddressConfirmed(true);
+          setShowMap(true);
+          mapAnimation.setValue(1);
+          break;
+        case 'phone':
+          setPhoneNumber(originalAnswerBeforeEdit.value);
+          break;
+        case 'budget':
+          setBudget(originalAnswerBeforeEdit.value);
+          break;
+        case 'allergy':
+          setAllergies(originalAnswerBeforeEdit.value);
+          break;
+        case 'preference':
+          setPreferences(originalAnswerBeforeEdit.value);
+          break;
       }
       
       // 退出编辑模式
       setEditingStep(null);
       setOriginalAnswerBeforeEdit(null);
-      
-      // 返回到最新的未完成步骤
-      const maxCompletedStep = Math.max(...Object.keys(completedAnswers).map(Number), editingStep);
-      setCurrentStep(Math.min(maxCompletedStep + 1, STEP_CONTENT.length - 1));
     }
   };
 
@@ -360,24 +339,47 @@ export default function LemonadeApp() {
     
     if (stepData.showAddressInput) {
       return (
-        <BaseInput
-          value={address}
-          onChangeText={(text) => {
-            if (!isAddressConfirmed || editingStep === 0) {
-              setAddress(text);
-            }
-          }}
-          placeholder="请输入地址"
-          iconName="location-on"
-          editable={!isAddressConfirmed || editingStep === 0}
-          isDisabled={isAddressConfirmed && editingStep !== 0}
-          showClearButton={!isAddressConfirmed || editingStep === 0}
-          showEditButton={isAddressConfirmed && editingStep !== 0}
-          onClear={() => setAddress('')}
-          onEdit={handleEditAddress}
-          onSubmitEditing={editingStep === 0 ? handleFinishEditing : handleAddressConfirm}
-          animationValue={inputSectionAnimation}
-        />
+        <View>
+          <BaseInput
+            value={address}
+            onChangeText={(text) => {
+              if (!isAddressConfirmed || editingStep === 0) {
+                setAddress(text);
+              }
+            }}
+            placeholder="请输入地址"
+            iconName="location-on"
+            editable={!isAddressConfirmed || editingStep === 0}
+            isDisabled={isAddressConfirmed && editingStep !== 0}
+            showClearButton={!isAddressConfirmed || editingStep === 0}
+            showEditButton={isAddressConfirmed && editingStep !== 0}
+            onClear={() => setAddress('')}
+            onEdit={handleEditAddress}
+            onSubmitEditing={editingStep === 0 ? handleFinishEditing : handleAddressConfirm}
+            animationValue={inputSectionAnimation}
+          />
+          
+          {/* Map Container - 编辑地址时显示 */}
+          {showMap && editingStep === 0 && (
+            <Animated.View 
+              style={[
+                {
+                  opacity: mapAnimation,
+                  transform: [{
+                    translateY: mapAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [16, 0],
+                    }),
+                  }],
+                },
+              ]}
+            >
+              <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginTop: 16 }}>
+                <MapComponent showMap={showMap} mapAnimation={mapAnimation} />
+              </View>
+            </Animated.View>
+          )}
+        </View>
       );
     }
     
@@ -503,8 +505,7 @@ export default function LemonadeApp() {
         style={globalStyles.scrollView} 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
-          globalStyles.scrollContent,
-          { minHeight: contentHeight }
+          globalStyles.scrollContent
         ]}
       >
         <View style={globalStyles.mainContent}>
@@ -516,6 +517,8 @@ export default function LemonadeApp() {
                 .map((stepIndex) => {
                   const index = parseInt(stepIndex);
                   const answer = completedAnswers[index];
+                  const isCurrentlyEditing = editingStep === index;
+                  
                   return (
                     <CompletedQuestion
                       key={index}
@@ -526,24 +529,27 @@ export default function LemonadeApp() {
                       answerAnimation={answerAnimations[index]}
                       onEdit={() => handleEditAnswer(index)}
                       formatAnswerDisplay={formatAnswerDisplay}
+                      isEditing={isCurrentlyEditing}
+                      editingInput={isCurrentlyEditing ? renderCurrentInput() : undefined}
+                      editingButtons={isCurrentlyEditing ? renderActionButton() : undefined}
                     />
                   );
                 })}
 
-              {/* Current Question */}
-              {(currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) || editingStep !== null ? (
+              {/* Current Question - 只在正常流程下显示，编辑模式下不显示 */}
+              {editingStep === null && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep] && (
                 <CurrentQuestion
                   displayedText={displayedText}
                   isTyping={isTyping}
                   showCursor={showCursor}
                   inputError={inputError}
-                  currentStep={currentStep}
+                  currentStep={editingStep !== null ? editingStep : currentStep}
                   currentQuestionAnimation={currentQuestionAnimation}
                   emotionAnimation={emotionAnimation}
                   shakeAnimation={shakeAnimation}
                 >
                   {/* Map Container */}
-                  {showMap && currentStep === 0 && (
+                  {showMap && (currentStep === 0 || editingStep === 0) && editingStep === null && (
                     <Animated.View 
                       style={[
                         {
@@ -569,12 +575,10 @@ export default function LemonadeApp() {
                   {/* Action Button */}
                   {renderActionButton()}
                 </CurrentQuestion>
-              ) : null}
+              )}
             </View>
           </View>
         </View>
-        
-        <View style={{ height: Math.max(0, contentHeight - 800) }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

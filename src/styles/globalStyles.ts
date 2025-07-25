@@ -173,8 +173,7 @@ export const answerStyles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: 'transparent',
     opacity: 0.9,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    
   },
 });
 

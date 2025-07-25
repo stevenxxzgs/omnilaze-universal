@@ -24,7 +24,9 @@ export const inputStyles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 3,
-  },
+    outline: 'none',
+    outlineWidth: 0,
+  } as any,
   simpleInputIcon: {
     marginRight: 12,
     flexShrink: 0,
