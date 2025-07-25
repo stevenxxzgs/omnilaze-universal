@@ -1,0 +1,119 @@
+import React from 'react';
+import { View, Text, TextInput, TouchableOpacity, Animated } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { inputStyles } from '../styles/inputStyles';
+
+interface BaseInputProps {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  iconName: keyof typeof MaterialIcons.glyphMap;
+  multiline?: boolean;
+  keyboardType?: 'default' | 'numeric';
+  maxLength?: number;
+  editable?: boolean;
+  isError?: boolean;
+  isDisabled?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  onSubmitEditing?: () => void;
+  returnKeyType?: 'done' | 'next';
+  showClearButton?: boolean;
+  showEditButton?: boolean;
+  onClear?: () => void;
+  onEdit?: () => void;
+  animationValue?: Animated.Value;
+}
+
+export const BaseInput: React.FC<BaseInputProps> = ({
+  value,
+  onChangeText,
+  placeholder,
+  iconName,
+  multiline = false,
+  keyboardType = 'default',
+  maxLength,
+  editable = true,
+  isError = false,
+  isDisabled = false,
+  onFocus,
+  onBlur,
+  onSubmitEditing,
+  returnKeyType = 'done',
+  showClearButton = true,
+  showEditButton = false,
+  onClear,
+  onEdit,
+  animationValue,
+}) => {
+  const getWrapperStyle = () => {
+    if (isDisabled) return [inputStyles.simpleInputWrapper, inputStyles.disabledSimpleInputWrapper];
+    if (isError) return [inputStyles.simpleInputWrapper, inputStyles.errorSimpleInputWrapper];
+    return inputStyles.simpleInputWrapper;
+  };
+
+  const WrapperComponent = animationValue ? Animated.View : View;
+  const wrapperProps = animationValue 
+    ? {
+        style: [
+          inputStyles.inputSection,
+          {
+            opacity: animationValue,
+            transform: [{
+              translateY: animationValue.interpolate({
+                inputRange: [0, 1],
+                outputRange: [20, 0],
+              }),
+            }],
+          },
+        ],
+      }
+    : { style: inputStyles.inputSection };
+
+  return (
+    <WrapperComponent {...wrapperProps}>
+      <View style={getWrapperStyle()}>
+        <MaterialIcons 
+          name={iconName}
+          size={20} 
+          color="#B0B0B0" 
+          style={inputStyles.simpleInputIcon}
+        />
+        <TextInput
+          style={[
+            inputStyles.simpleTextInput,
+            multiline && inputStyles.multilineInput
+          ] as any}
+          placeholder={placeholder}
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          editable={editable}
+          multiline={multiline}
+          numberOfLines={multiline ? 2 : 1}
+          keyboardType={keyboardType}
+          maxLength={maxLength}
+          onSubmitEditing={onSubmitEditing}
+          returnKeyType={returnKeyType}
+        />
+        {value && showClearButton && !isDisabled && onClear && (
+          <TouchableOpacity 
+            onPress={onClear}
+            style={inputStyles.simpleInputClearButton}
+          >
+            <MaterialIcons name="close" size={18} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+        {showEditButton && onEdit && (
+          <TouchableOpacity 
+            onPress={onEdit}
+            style={inputStyles.simpleInputEditButton}
+          >
+            <MaterialIcons name="edit" size={18} color="#6b7280" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </WrapperComponent>
+  );
+};
