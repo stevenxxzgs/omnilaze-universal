@@ -127,6 +127,12 @@ export default function LemonadeApp() {
   const [inputError, setInputError] = useState('')
   const [shakeAnimation] = useState(new Animated.Value(0))
   
+  // 输入框动画状态
+  const [inputSectionAnimation] = useState(new Animated.Value(0))
+  
+  // hover状态管理
+  const [hoveredAnswerIndex, setHoveredAnswerIndex] = useState<number | null>(null)
+  
   // 光标闪烁效果
   useEffect(() => {
     const cursorInterval = setInterval(() => {
@@ -141,6 +147,9 @@ export default function LemonadeApp() {
     setIsTyping(true)
     setDisplayedText('')
     
+    // 重置输入框动画
+    inputSectionAnimation.setValue(0)
+    
     let index = 0
     const timer = setInterval(() => {
       if (index < text.length) {
@@ -149,6 +158,16 @@ export default function LemonadeApp() {
       } else {
         setIsTyping(false)
         clearInterval(timer)
+        
+        // 打字机完成后，启动输入框出现动画
+        setTimeout(() => {
+          Animated.spring(inputSectionAnimation, {
+            toValue: 1,
+            tension: 60,
+            friction: 8,
+            useNativeDriver: true,
+          }).start()
+        }, 300) // 300ms延迟让用户看完文字
       }
     }, speed)
     
@@ -247,12 +266,15 @@ export default function LemonadeApp() {
       setDisplayedText('')
       setIsTyping(false)
       
+      // 重置输入框动画
+      inputSectionAnimation.setValue(0)
+      
       // 直接设置透明度为1，移除出现动画
       currentQuestionAnimation.setValue(1)
       
       // 开始打字机效果
       setTimeout(() => {
-        typeText(getCurrentStepData().message, 30)
+        typeText(getCurrentStepData().message, 80)
       }, 100) // 减少延迟
     }
   }, [currentStep, completedAnswers])
@@ -494,6 +516,43 @@ export default function LemonadeApp() {
     mapAnimation.setValue(0)
   }
 
+  // 编辑答案功能
+  const handleEditAnswer = (stepIndex: number) => {
+    // 移除该步骤及之后的所有答案
+    const newCompletedAnswers = { ...completedAnswers }
+    Object.keys(newCompletedAnswers).forEach(key => {
+      if (parseInt(key) >= stepIndex) {
+        delete newCompletedAnswers[parseInt(key)]
+      }
+    })
+    
+    setCompletedAnswers(newCompletedAnswers)
+    
+    // 重置相应的状态
+    if (stepIndex === 0) {
+      setIsAddressConfirmed(false)
+      setShowMap(false)
+      setAddress('')
+      mapAnimation.setValue(0)
+    } else if (stepIndex === 1) {
+      setPhoneNumber('')
+    } else if (stepIndex === 2) {
+      setBudget('')
+    } else if (stepIndex === 3) {
+      setAllergies('')
+    } else if (stepIndex === 4) {
+      setPreferences('')
+    }
+    
+    // 跳转到对应步骤
+    setCurrentStep(stepIndex)
+    
+    // 重置动画状态
+    for (let i = stepIndex; i < answerAnimations.length; i++) {
+      answerAnimations[i].setValue(0)
+    }
+  }
+
   const getCurrentStepData = () => stepContent[currentStep]
 
   const canProceed = () => {
@@ -616,7 +675,10 @@ export default function LemonadeApp() {
                       <View style={styles.completedQuestionRow}>
                         <View style={styles.questionHeader}>
                           <View style={styles.avatarSimple}>
-                            <Text style={styles.avatarInitial}>AI</Text>
+                            <Image 
+                              source={require('./assets/icon.png')} 
+                              style={styles.avatarImage}
+                            />
                           </View>
                           <Text style={styles.questionText}>
                             {stepContent[index].message}
@@ -644,9 +706,23 @@ export default function LemonadeApp() {
                             }
                           }}
                         >
-                          <Text style={styles.answerValue}>
-                            {formatAnswerDisplay(answer)}
-                          </Text>
+                          <View 
+                            style={styles.answerWithEdit}
+                            onMouseEnter={() => setHoveredAnswerIndex(index)}
+                            onMouseLeave={() => setHoveredAnswerIndex(null)}
+                          >
+                            <Text style={styles.answerValue}>
+                              {formatAnswerDisplay(answer)}
+                            </Text>
+                            {hoveredAnswerIndex === index && (
+                              <TouchableOpacity 
+                                onPress={() => handleEditAnswer(index)}
+                                style={styles.editAnswerButton}
+                              >
+                                <MaterialIcons name="edit" size={23} color="#6B7280" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         </Animated.View>
                       </View>
                     </Animated.View>
@@ -680,7 +756,10 @@ export default function LemonadeApp() {
                           },
                         ]}
                       >
-                        <Text style={styles.avatarInitial}>AI</Text>
+                        <Image 
+                          source={require('./assets/icon.png')} 
+                          style={styles.avatarImage}
+                        />
                       </Animated.View>
                       <Animated.View 
                         style={[
@@ -745,7 +824,20 @@ export default function LemonadeApp() {
 
                   {/* Address Input - 第一个问题 */}
                   {getCurrentStepData().showAddressInput && (
-                    <View style={styles.inputSection}>
+                    <Animated.View 
+                      style={[
+                        styles.inputSection,
+                        {
+                          opacity: inputSectionAnimation,
+                          transform: [{
+                            translateY: inputSectionAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [20, 0],
+                            }),
+                          }],
+                        },
+                      ]}
+                    >
                       <View style={[
                         styles.simpleInputWrapper,
                         isAddressConfirmed && styles.disabledSimpleInputWrapper
@@ -789,12 +881,25 @@ export default function LemonadeApp() {
                           </TouchableOpacity>
                         )}
                       </View>
-                    </View>
+                    </Animated.View>
                   )}
 
                   {/* Phone Input - 第二个问题 */}
                   {getCurrentStepData().showPhoneInput && (
-                    <View style={styles.inputSection}>
+                    <Animated.View 
+                      style={[
+                        styles.inputSection,
+                        {
+                          opacity: inputSectionAnimation,
+                          transform: [{
+                            translateY: inputSectionAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [20, 0],
+                            }),
+                          }],
+                        },
+                      ]}
+                    >
                       <View style={[
                         styles.simpleInputWrapper,
                         !validatePhoneNumber(phoneNumber) && phoneNumber.length > 0 && styles.errorSimpleInputWrapper
@@ -823,12 +928,25 @@ export default function LemonadeApp() {
                           </TouchableOpacity>
                         )}
                       </View>
-                    </View>
+                    </Animated.View>
                   )}
 
                   {/* Budget Input - 第三个问题 */}
                   {getCurrentStepData().showBudgetInput && (
-                    <View style={styles.inputSection}>
+                    <Animated.View 
+                      style={[
+                        styles.inputSection,
+                        {
+                          opacity: inputSectionAnimation,
+                          transform: [{
+                            translateY: inputSectionAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [20, 0],
+                            }),
+                          }],
+                        },
+                      ]}
+                    >
                       {/* 预设金额按钮 */}
                       <View style={styles.budgetOptionsContainer}>
                         {['30', '50', '100', '200'].map((amount) => (
@@ -875,12 +993,25 @@ export default function LemonadeApp() {
                           </TouchableOpacity>
                         )}
                       </View>
-                    </View>
+                    </Animated.View>
                   )}
 
                   {/* Allergy Input - 第四个问题 */}
                   {getCurrentStepData().showAllergyInput && (
-                    <View style={styles.inputSection}>
+                    <Animated.View 
+                      style={[
+                        styles.inputSection,
+                        {
+                          opacity: inputSectionAnimation,
+                          transform: [{
+                            translateY: inputSectionAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [20, 0],
+                            }),
+                          }],
+                        },
+                      ]}
+                    >
                       <View style={styles.simpleInputWrapper}>
                         <MaterialIcons 
                           name="warning" 
@@ -906,12 +1037,25 @@ export default function LemonadeApp() {
                           </TouchableOpacity>
                         )}
                       </View>
-                    </View>
+                    </Animated.View>
                   )}
 
                   {/* Preference Input - 第五个问题 */}
                   {getCurrentStepData().showPreferenceInput && (
-                    <View style={styles.inputSection}>
+                    <Animated.View 
+                      style={[
+                        styles.inputSection,
+                        {
+                          opacity: inputSectionAnimation,
+                          transform: [{
+                            translateY: inputSectionAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [20, 0],
+                            }),
+                          }],
+                        },
+                      ]}
+                    >
                       <View style={styles.simpleInputWrapper}>
                         <MaterialIcons 
                           name="favorite" 
@@ -937,10 +1081,21 @@ export default function LemonadeApp() {
                           </TouchableOpacity>
                         )}
                       </View>
-                    </View>
+                    </Animated.View>
                   )}
 
                   {/* Action Button */}
+                  <Animated.View
+                    style={{
+                      opacity: inputSectionAnimation,
+                      transform: [{
+                        translateY: inputSectionAnimation.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [20, 0],
+                        }),
+                      }],
+                    }}
+                  >
                   {currentStep === 0 && !isAddressConfirmed ? (
                     <TouchableOpacity
                       onPress={handleAddressConfirm}
@@ -967,6 +1122,7 @@ export default function LemonadeApp() {
                       </Text>
                     </TouchableOpacity>
                   ) : null}
+                  </Animated.View>
                   </View>
                 </Animated.View>
               )}
@@ -1461,6 +1617,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    overflow: 'hidden', // 确保图片不超出边界
+  },
+  
+  avatarImage: {
+    width: 36, // 稍小于容器，留出边距
+    height: 36,
+    borderRadius: 12,
   },
   
   avatarInitial: {
@@ -1511,6 +1674,20 @@ const styles = StyleSheet.create({
     color: '#444444',
     fontWeight: '400',
     lineHeight: 36, // 相应调整行高：48→36
+  },
+  
+  answerWithEdit: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start', // 改为左对齐
+    gap: 10, // 设置10px间距
+  },
+  
+  editAnswerButton: {
+    padding: 6, // 增加内边距
+    borderRadius: 6, // 增加圆角
+    backgroundColor: 'transparent', // 添加浅色背景
+    opacity: 1, // 移除透明度，在hover时完全显示
   },
   
   inputSection: {
