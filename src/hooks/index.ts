@@ -56,17 +56,17 @@ export const useValidation = () => {
     setInputError('');
     
     switch (step) {
-      case 0: // 地址
-        if (!value || value.trim().length < VALIDATION.MIN_ADDRESS_LENGTH) {
-          const errorMessage = '请输入完整的配送地址';
+      case 0: // 手机号
+        if (!validatePhoneNumber(value)) {
+          const errorMessage = '请输入正确的11位手机号码';
           setInputError(errorMessage);
           return { isValid: false, errorMessage };
         }
         return { isValid: true };
         
-      case 1: // 手机号
-        if (!validatePhoneNumber(value)) {
-          const errorMessage = '请输入正确的11位手机号码';
+      case 1: // 地址  
+        if (!value || value.trim().length < VALIDATION.MIN_ADDRESS_LENGTH) {
+          const errorMessage = '请输入完整的配送地址';
           setInputError(errorMessage);
           return { isValid: false, errorMessage };
         }

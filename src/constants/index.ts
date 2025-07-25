@@ -12,7 +12,7 @@ export const LAYOUT = {
 } as const;
 
 export const TIMING = {
-  TYPING_SPEED: 80,
+  TYPING_SPEED: 60,
   CURSOR_BLINK: 500,
   ANIMATION_DELAY: 300,
   SCROLL_DELAY: 400,

@@ -51,6 +51,12 @@ export default function LemonadeApp() {
   const [completedAnswers, setCompletedAnswers] = useState<CompletedAnswers>({});
   const [editingStep, setEditingStep] = useState<number | null>(null);
   const [originalAnswerBeforeEdit, setOriginalAnswerBeforeEdit] = useState<Answer | null>(null);
+  
+  // 验证码相关状态
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isVerificationCodeSent, setIsVerificationCodeSent] = useState(false);
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
   // Custom hooks
   const { displayedText, isTyping, showCursor, typeText, setDisplayedText } = useTypewriterEffect();
@@ -73,6 +79,8 @@ export default function LemonadeApp() {
   useEffect(() => {
     // 只在非编辑模式下触发打字机效果
     if (editingStep === null && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
+      // 先清空文本，避免闪现
+      setDisplayedText('');
       inputSectionAnimation.setValue(0);
       currentQuestionAnimation.setValue(1);
       
@@ -106,6 +114,17 @@ export default function LemonadeApp() {
     }
   }, [displayedText, isTyping, editingStep]);
 
+  // 倒计时 useEffect
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (countdown > 0) {
+      timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
   // Helper functions
   const getCurrentStepData = () => STEP_CONTENT[currentStep];
 
@@ -113,8 +132,8 @@ export default function LemonadeApp() {
     // 编辑模式下使用编辑步骤，否则使用当前步骤
     const stepToUse = editingStep !== null ? editingStep : currentStep;
     switch (stepToUse) {
-      case 0: return { type: 'address', value: address };
-      case 1: return { type: 'phone', value: phoneNumber };
+      case 0: return { type: 'phone', value: phoneNumber };
+      case 1: return { type: 'address', value: address };
       case 2: return { type: 'budget', value: budget };
       case 3: return { type: 'allergy', value: allergies };
       case 4: return { type: 'preference', value: preferences };
@@ -139,10 +158,10 @@ export default function LemonadeApp() {
     if (editingStep !== null) {
       const stepData = STEP_CONTENT[editingStep];
       switch (stepData.inputType) {
+        case 'phone':
+          return validatePhoneNumber(phoneNumber) && phoneNumber.length === 11 && isPhoneVerified;
         case 'address':
           return !!address.trim() && address.trim().length >= 5;
-        case 'phone':
-          return validatePhoneNumber(phoneNumber) && phoneNumber.length === 11;
         case 'budget':
           return !!budget.trim() && parseFloat(budget) >= 10;
         case 'allergy':
@@ -156,10 +175,10 @@ export default function LemonadeApp() {
     // 正常流程的验证逻辑
     const stepData = getCurrentStepData();
     switch (stepData.inputType) {
+      case 'phone':
+        return validatePhoneNumber(phoneNumber) && phoneNumber.length === 11 && isPhoneVerified;
       case 'address':
         return isAddressConfirmed && !!address.trim();
-      case 'phone':
-        return validatePhoneNumber(phoneNumber) && phoneNumber.length === 11;
       case 'budget':
         return !!budget.trim() && parseFloat(budget) >= 10;
       case 'allergy':
@@ -171,8 +190,41 @@ export default function LemonadeApp() {
   };
 
   // Event handlers
+  const handleSendVerificationCode = () => {
+    if (!validatePhoneNumber(phoneNumber) || phoneNumber.length !== 11) {
+      triggerShake();
+      return;
+    }
+    
+    // 模拟发送验证码
+    setIsVerificationCodeSent(true);
+    setCountdown(180); // 3分钟倒计时
+    changeEmotion('📱');
+    
+    // 这里可以添加实际的API调用
+    console.log('发送验证码到:', phoneNumber);
+  };
+
+  const handleVerifyCode = () => {
+    if (verificationCode.length !== 6) {
+      setInputError('请输入6位验证码');
+      triggerShake();
+      return;
+    }
+    
+    // 模拟验证码验证（在实际项目中这里应该调用API）
+    if (verificationCode === '123456') {
+      setIsPhoneVerified(true);
+      setInputError('');
+      changeEmotion('✅');
+    } else {
+      setInputError('验证码错误，请重新输入');
+      triggerShake();
+    }
+  };
+
   const handleAddressConfirm = () => {
-    if (!validateInput(0, address).isValid) {
+    if (!validateInput(1, address).isValid) {
       triggerShake();
       return;
     }
@@ -246,14 +298,19 @@ export default function LemonadeApp() {
     
     // 恢复编辑步骤的输入值
     switch (answerToEdit.type) {
+      case 'phone':
+        setPhoneNumber(answerToEdit.value);
+        // 重置验证码状态
+        setVerificationCode('');
+        setIsVerificationCodeSent(false);
+        setIsPhoneVerified(false);
+        setCountdown(0);
+        break;
       case 'address':
         setAddress(answerToEdit.value);
         setIsAddressConfirmed(false);
         setShowMap(false);
         mapAnimation.setValue(0);
-        break;
-      case 'phone':
-        setPhoneNumber(answerToEdit.value);
         break;
       case 'budget':
         setBudget(answerToEdit.value);
@@ -286,7 +343,7 @@ export default function LemonadeApp() {
       }));
       
       // 特殊处理地址步骤
-      if (editingStep === 0) {
+      if (editingStep === 1) {
         setIsAddressConfirmed(true);
         Animated.timing(mapAnimation, {
           toValue: 1,
@@ -306,14 +363,19 @@ export default function LemonadeApp() {
     if (editingStep !== null && originalAnswerBeforeEdit) {
       // 恢复原始答案的输入值
       switch (originalAnswerBeforeEdit.type) {
+        case 'phone':
+          setPhoneNumber(originalAnswerBeforeEdit.value);
+          // 假设原来的手机号已经验证过，恢复验证状态
+          setIsPhoneVerified(true);
+          setIsVerificationCodeSent(true);
+          setVerificationCode('');
+          setCountdown(0);
+          break;
         case 'address':
           setAddress(originalAnswerBeforeEdit.value);
           setIsAddressConfirmed(true);
           setShowMap(true);
           mapAnimation.setValue(1);
-          break;
-        case 'phone':
-          setPhoneNumber(originalAnswerBeforeEdit.value);
           break;
         case 'budget':
           setBudget(originalAnswerBeforeEdit.value);
@@ -343,24 +405,24 @@ export default function LemonadeApp() {
           <BaseInput
             value={address}
             onChangeText={(text) => {
-              if (!isAddressConfirmed || editingStep === 0) {
+              if (!isAddressConfirmed || editingStep === 1) {
                 setAddress(text);
               }
             }}
             placeholder="请输入地址"
             iconName="location-on"
-            editable={!isAddressConfirmed || editingStep === 0}
-            isDisabled={isAddressConfirmed && editingStep !== 0}
-            showClearButton={!isAddressConfirmed || editingStep === 0}
-            showEditButton={isAddressConfirmed && editingStep !== 0}
+            editable={!isAddressConfirmed || editingStep === 1}
+            isDisabled={isAddressConfirmed && editingStep !== 1}
+            showClearButton={!isAddressConfirmed || editingStep === 1}
+            showEditButton={isAddressConfirmed && editingStep !== 1}
             onClear={() => setAddress('')}
             onEdit={handleEditAddress}
-            onSubmitEditing={editingStep === 0 ? handleFinishEditing : handleAddressConfirm}
+            onSubmitEditing={editingStep === 1 ? handleFinishEditing : handleAddressConfirm}
             animationValue={inputSectionAnimation}
           />
           
           {/* Map Container - 编辑地址时显示 */}
-          {showMap && editingStep === 0 && (
+          {showMap && editingStep === 1 && (
             <Animated.View 
               style={[
                 {
@@ -385,18 +447,38 @@ export default function LemonadeApp() {
     
     if (stepData.showPhoneInput) {
       return (
-        <BaseInput
-          value={phoneNumber}
-          onChangeText={setPhoneNumber}
-          placeholder="请输入11位手机号"
-          iconName="phone"
-          keyboardType="numeric"
-          maxLength={11}
-          isError={!validatePhoneNumber(phoneNumber) && phoneNumber.length > 0}
-          onClear={() => setPhoneNumber('')}
-          onSubmitEditing={editingStep === 1 ? handleFinishEditing : undefined}
-          animationValue={inputSectionAnimation}
-        />
+        <View>
+          <BaseInput
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            placeholder="请输入11位手机号"
+            iconName="phone"
+            keyboardType="numeric"
+            maxLength={11}
+            isError={!validatePhoneNumber(phoneNumber) && phoneNumber.length > 0}
+            onClear={() => setPhoneNumber('')}
+            onSubmitEditing={editingStep === 0 ? handleFinishEditing : undefined}
+            animationValue={inputSectionAnimation}
+          />
+          
+          {/* 验证码输入框 - 只有发送验证码后才显示 */}
+          {isVerificationCodeSent && !isPhoneVerified && (
+            <View style={{ marginTop: 16 }}>
+              <BaseInput
+                value={verificationCode}
+                onChangeText={setVerificationCode}
+                placeholder="请输入6位验证码"
+                iconName="security"
+                keyboardType="numeric"
+                maxLength={6}
+                isError={inputError.includes('验证码')}
+                onClear={() => setVerificationCode('')}
+                onSubmitEditing={handleVerifyCode}
+                animationValue={inputSectionAnimation}
+              />
+            </View>
+          )}
+        </View>
       );
     }
     
@@ -464,8 +546,44 @@ export default function LemonadeApp() {
       );
     }
     
+    // 手机号步骤的按钮逻辑
+    if (currentStep === 0) {
+      if (!isVerificationCodeSent) {
+        // 发送验证码按钮
+        return (
+          <ActionButton
+            onPress={handleSendVerificationCode}
+            title="发送验证码"
+            disabled={!validatePhoneNumber(phoneNumber) || phoneNumber.length !== 11}
+            isActive={validatePhoneNumber(phoneNumber) && phoneNumber.length === 11}
+            animationValue={inputSectionAnimation}
+          />
+        );
+      } else if (!isPhoneVerified) {
+        // 验证码相关按钮
+        return (
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <ActionButton
+              onPress={handleVerifyCode}
+              title="确认"
+              disabled={verificationCode.length !== 6}
+              isActive={verificationCode.length === 6}
+              animationValue={inputSectionAnimation}
+            />
+            <ActionButton
+              onPress={handleSendVerificationCode}
+              title={countdown > 0 ? `重新发送(${countdown}s)` : "重新发送"}
+              disabled={countdown > 0}
+              isActive={countdown === 0}
+              animationValue={inputSectionAnimation}
+            />
+          </View>
+        );
+      }
+    }
+    
     // 正常流程的按钮
-    if (currentStep === 0 && !isAddressConfirmed) {
+    if (currentStep === 1 && !isAddressConfirmed) {
       return (
         <ActionButton
           onPress={handleAddressConfirm}
@@ -549,7 +667,7 @@ export default function LemonadeApp() {
                   shakeAnimation={shakeAnimation}
                 >
                   {/* Map Container */}
-                  {showMap && (currentStep === 0 || editingStep === 0) && editingStep === null && (
+                  {showMap && (currentStep === 1 || editingStep === 1) && editingStep === null && (
                     <Animated.View 
                       style={[
                         {
