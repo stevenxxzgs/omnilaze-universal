@@ -15,6 +15,7 @@ interface ImageCheckboxProps {
   selectedIds: string[];
   onSelectionChange: (selectedIds: string[]) => void;
   animationValue?: Animated.Value;
+  singleSelect?: boolean; // 新增：是否单选模式
 }
 
 export const ImageCheckbox: React.FC<ImageCheckboxProps> = ({
@@ -22,6 +23,7 @@ export const ImageCheckbox: React.FC<ImageCheckboxProps> = ({
   selectedIds,
   onSelectionChange,
   animationValue,
+  singleSelect = false, // 默认多选
 }) => {
   const [shouldRender, setShouldRender] = useState(!animationValue);
 
@@ -42,12 +44,24 @@ export const ImageCheckbox: React.FC<ImageCheckboxProps> = ({
     const isSelected = selectedIds.includes(optionId);
     let newSelection: string[];
     
-    if (isSelected) {
-      // 取消选择
-      newSelection = selectedIds.filter(id => id !== optionId);
+    if (singleSelect) {
+      // 单选模式
+      if (isSelected) {
+        // 如果已选择，则取消选择
+        newSelection = [];
+      } else {
+        // 选择当前项，取消其他选择
+        newSelection = [optionId];
+      }
     } else {
-      // 添加选择
-      newSelection = [...selectedIds, optionId];
+      // 多选模式（原逻辑）
+      if (isSelected) {
+        // 取消选择
+        newSelection = selectedIds.filter(id => id !== optionId);
+      } else {
+        // 添加选择
+        newSelection = [...selectedIds, optionId];
+      }
     }
     
     onSelectionChange(newSelection);
@@ -178,11 +192,12 @@ const styles = StyleSheet.create({
     height: 48,
   },
   optionLabel: {
-    fontSize: 16,
+    fontSize: 21, // 从16增加到21 (增加1/3)
     fontWeight: '500',
     color: COLORS.TEXT_PRIMARY,
     textAlign: 'center',
-    marginVertical: 4,
+    marginVertical: 8, // 从4增加到8，增加上下间距
+    marginBottom: 16, // 增加底部间距，让文字离checkbox更远
   },
   selectedLabel: {
     color: COLORS.PRIMARY,

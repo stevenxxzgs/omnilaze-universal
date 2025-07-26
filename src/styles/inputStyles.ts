@@ -72,6 +72,13 @@ export const inputStyles = StyleSheet.create({
     textAlignVertical: 'top',
     paddingTop: 16,
   },
+  errorText: {
+    fontSize: 14,
+    color: COLORS.ERROR,
+    marginTop: 8,
+    marginLeft: 4,
+    fontWeight: '400',
+  },
 });
 
 export const budgetStyles = StyleSheet.create({

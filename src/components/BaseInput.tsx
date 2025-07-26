@@ -23,6 +23,7 @@ interface BaseInputProps {
   onClear?: () => void;
   onEdit?: () => void;
   animationValue?: Animated.Value;
+  errorMessage?: string; // 新增：错误信息
 }
 
 export const BaseInput: React.FC<BaseInputProps> = ({
@@ -45,6 +46,7 @@ export const BaseInput: React.FC<BaseInputProps> = ({
   onClear,
   onEdit,
   animationValue,
+  errorMessage, // 新增：错误信息
 }) => {
   const getWrapperStyle = () => {
     if (isDisabled) return [inputStyles.simpleInputWrapper, inputStyles.disabledSimpleInputWrapper];
@@ -115,6 +117,9 @@ export const BaseInput: React.FC<BaseInputProps> = ({
           </TouchableOpacity>
         )}
       </View>
+      {errorMessage && (
+        <Text style={inputStyles.errorText}>{errorMessage}</Text>
+      )}
     </WrapperComponent>
   );
 };

@@ -39,6 +39,8 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
   const [isNewUser, setIsNewUser] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [inputError, setInputError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showVerificationUI, setShowVerificationUI] = useState(false); // 控制验证码UI显示时机
 
   // 初始化时设置问题文本
   useEffect(() => {
@@ -63,6 +65,15 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
       return;
     }
     
+    // 防止重复点击
+    if (isLoading) {
+      return;
+    }
+    
+    setIsLoading(true);
+    setInputError('');
+    onError(''); // 清除父组件错误
+    
     try {
       const result = await sendVerificationCode(phoneNumber);
       
@@ -70,22 +81,29 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
         setIsVerificationCodeSent(true);
         setCountdown(180); // 3分钟倒计时
         changeEmotion('📱');
-        setInputError('');
         onQuestionChange('请输入收到的6位验证码'); // 更新问题文本
+        
+        // 等待问题文字完全显示后再显示验证码输入框和按钮
+        setTimeout(() => {
+          setShowVerificationUI(true);
+        }, 1000); // 等待1秒让打字机效果完成
       } else {
         setInputError(result.message);
         triggerShake();
       }
     } catch (error) {
-      setInputError('发送验证码失败，请重试');
+      const errorMessage = '发送验证码失败，请重试';
+      setInputError(errorMessage);
       triggerShake();
       console.error('发送验证码错误:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleVerifyCode = async () => {
     if (verificationCode.length !== 6) {
-      setInputError('请输入6位验证码');
+      setInputError('验证码格式错误，请输入6位验证码');
       triggerShake();
       return;
     }
@@ -96,6 +114,7 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
       if (result.success) {
         setIsPhoneVerified(true);
         setInputError('');
+        onError(''); // 清除父组件错误
         changeEmotion('✅');
         
         // 判断是否为新用户（这里需要后端API返回新的字段）
@@ -120,7 +139,8 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
         triggerShake();
       }
     } catch (error) {
-      setInputError('验证失败，请重试');
+      const errorMessage = '验证失败，请重试';
+      setInputError(errorMessage);
       triggerShake();
       console.error('验证码验证错误:', error);
     }
@@ -139,6 +159,7 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
       if (result.success) {
         changeEmotion('🎉');
         setInputError('');
+        onError(''); // 清除父组件错误
         
         onAuthSuccess({
           success: true,
@@ -151,7 +172,8 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
         triggerShake();
       }
     } catch (error) {
-      setInputError('验证邀请码失败，请重试');
+      const errorMessage = '验证邀请码失败，请重试';
+      setInputError(errorMessage);
       triggerShake();
       console.error('邀请码验证错误:', error);
     }
@@ -168,6 +190,7 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
       isError={!validatePhoneNumber(phoneNumber) && phoneNumber.length > 0}
       onClear={() => setPhoneNumber('')}
       animationValue={animationValue}
+      errorMessage={inputError}
     />
   );
 
@@ -180,10 +203,11 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
         iconName="security"
         keyboardType="numeric"
         maxLength={6}
-        isError={inputError.includes('验证码')}
+        isError={inputError.includes('验证码') && inputError.length > 0}
         onClear={() => setVerificationCode('')}
         onSubmitEditing={handleVerifyCode}
         animationValue={animationValue}
+        errorMessage={inputError}
       />
     </View>
   );
@@ -195,10 +219,11 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
         onChangeText={setInviteCode}
         placeholder="请输入邀请码"
         iconName="card-membership"
-        isError={inputError.includes('邀请码')}
+        isError={inputError.includes('邀请码') && inputError.length > 0}
         onClear={() => setInviteCode('')}
         onSubmitEditing={handleVerifyInviteCode}
         animationValue={animationValue}
+        errorMessage={inputError}
       />
     </View>
   );
@@ -222,9 +247,9 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
       return (
         <ActionButton
           onPress={handleSendVerificationCode}
-          title="发送验证码"
-          disabled={!validatePhoneNumber(phoneNumber) || phoneNumber.length !== 11}
-          isActive={validatePhoneNumber(phoneNumber) && phoneNumber.length === 11}
+          title={isLoading ? "发送中..." : "发送验证码"}
+          disabled={!validatePhoneNumber(phoneNumber) || phoneNumber.length !== 11 || isLoading}
+          isActive={validatePhoneNumber(phoneNumber) && phoneNumber.length === 11 && !isLoading}
           animationValue={animationValue}
         />
       );
@@ -240,9 +265,9 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
           />
           <ActionButton
             onPress={handleSendVerificationCode}
-            title={countdown > 0 ? `重新发送(${countdown}s)` : "重新发送"}
-            disabled={countdown > 0}
-            isActive={countdown === 0}
+            title={isLoading ? "发送中..." : (countdown > 0 ? `重新发送(${countdown}s)` : "重新发送")}
+            disabled={countdown > 0 || isLoading}
+            isActive={countdown === 0 && !isLoading}
             animationValue={animationValue}
           />
         </View>
@@ -256,23 +281,12 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
     <View>
       {renderPhoneInput()}
       
-      {isVerificationCodeSent && !isPhoneVerified && renderVerificationCodeInput()}
+      {isVerificationCodeSent && !isPhoneVerified && showVerificationUI && renderVerificationCodeInput()}
       
       {isPhoneVerified && isNewUser && renderInviteCodeInput()}
       
-      {inputError && (
-        <Text style={{
-          color: '#ff4444',
-          fontSize: 14,
-          marginTop: 8,
-          textAlign: 'center'
-        }}>
-          {inputError}
-        </Text>
-      )}
-      
       <View style={{ marginTop: 16 }}>
-        {renderActionButtons()}
+        {(!isVerificationCodeSent || showVerificationUI) && renderActionButtons()}
       </View>
     </View>
   );

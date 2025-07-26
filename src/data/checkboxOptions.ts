@@ -3,32 +3,27 @@ export const ALLERGY_OPTIONS = [
   {
     id: 'seafood',
     label: '海鲜类',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的海鲜图片
+    image: require('../../assets/allergies/海鲜类.png'),
   },
   {
     id: 'nuts',
     label: '坚果类', 
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的坚果图片
+    image: require('../../assets/allergies/坚果类.png'),
   },
   {
     id: 'eggs',
     label: '蛋类',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的蛋类图片
+    image: require('../../assets/allergies/蛋类.png'),
   },
   {
     id: 'soy',
     label: '大豆类',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的大豆图片
+    image: require('../../assets/allergies/大豆类.png'),
   },
   {
-    id: 'wheat',
-    label: '小麦类',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的小麦图片
-  },
-  {
-    id: 'additives',
-    label: '添加剂',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的添加剂图片
+    id: 'dairy',
+    label: '乳制品类',
+    image: require('../../assets/allergies/乳制品类.png'),
   },
 ];
 
@@ -36,47 +31,27 @@ export const ALLERGY_OPTIONS = [
 export const PREFERENCE_OPTIONS = [
   {
     id: 'spicy',
-    label: '喜欢辣',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的辣椒图片
+    label: '香辣',
+    image: require('../../assets/preferences/香辣.png'),
   },
   {
     id: 'mild',
     label: '清淡',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的清淡图片
+    image: require('../../assets/preferences/清淡.png'),
   },
   {
     id: 'sweet',
-    label: '偏甜',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的甜味图片
+    label: '甜口',
+    image: require('../../assets/preferences/甜口.png'),
   },
   {
-    id: 'sour',
-    label: '酸味',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的酸味图片
+    id: 'sour-spicy',
+    label: '酸辣',
+    image: require('../../assets/preferences/酸辣.png'),
   },
   {
     id: 'salty',
-    label: '咸味',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的咸味图片
-  },
-  {
-    id: 'vegetarian',
-    label: '素食',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的素食图片
-  },
-  {
-    id: 'healthy',
-    label: '健康',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的健康图片
-  },
-  {
-    id: 'comfort',
-    label: '家常',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的家常图片
-  },
-  {
-    id: 'exotic',
-    label: '异国风味',
-    image: require('../../assets/icon.png'), // 临时使用，你需要替换为实际的异国风味图片
+    label: '咸鲜',
+    image: require('../../assets/preferences/咸鲜.png'),
   },
 ];

@@ -98,14 +98,17 @@ export default function LemonadeApp() {
   useEffect(() => {
     // 只在非编辑模式下触发打字机效果
     if (editingStep === null && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
-      // 先清空文本，避免闪现
-      setDisplayedText('');
       inputSectionAnimation.setValue(0);
       currentQuestionAnimation.setValue(1);
       
+      // 立即设置新问题的第一个字符，避免显示旧问题文本造成的闪烁
+      const newMessage = getCurrentStepData().message;
+      setDisplayedText(newMessage.substring(0, 1));
+      
+      // 然后开始打字机效果（从第二个字符开始）
       setTimeout(() => {
-        typeText(getCurrentStepData().message, 80);
-      }, 100);
+        typeText(newMessage, 80);
+      }, 10); // 很短的延迟确保第一个字符已经设置
     }
   }, [currentStep, completedAnswers, editingStep]);
 
@@ -155,12 +158,7 @@ export default function LemonadeApp() {
     // 开始订单收集流程
     setTimeout(() => {
       setCurrentStep(0); // 设置为第一个订单收集步骤（地址）
-      // 触发第一个订单问题的打字机效果
-      const firstStepData = STEP_CONTENT[0];
-      setDisplayedText('');
-      setTimeout(() => {
-        typeText(firstStepData.message, 80);
-      }, 100);
+      // useEffect会自动触发打字机效果，不需要手动调用
     }, 500);
   };
   
@@ -168,10 +166,7 @@ export default function LemonadeApp() {
   const handleAuthQuestionChange = (question: string) => {
     setAuthQuestionText(question);
     // 触发打字机效果重新显示新问题
-    setDisplayedText('');
-    setTimeout(() => {
-      typeText(question, 80);
-    }, 100);
+    typeText(question, 80);
   };
   
   // 鉴权错误回调
@@ -316,6 +311,7 @@ export default function LemonadeApp() {
       friction: 8,
       useNativeDriver: true,
     }).start(() => {
+      // 减少延迟以避免闪烁
       setTimeout(() => {
         if (currentStep < STEP_CONTENT.length - 1) {
           setCurrentStep(currentStep + 1);
@@ -323,7 +319,7 @@ export default function LemonadeApp() {
           // 最后一步完成，创建订单
           handleCreateOrder();
         }
-      }, TIMING.SCROLL_DELAY);
+      }, 200); // 减少延迟从400ms到200ms
     });
   };
 
@@ -567,6 +563,7 @@ export default function LemonadeApp() {
             onEdit={handleEditAddress}
             onSubmitEditing={editingStep === 0 ? handleFinishEditing : handleAddressConfirm}
             animationValue={inputSectionAnimation}
+            errorMessage={inputError}
           />
           
           {/* Map Container - 编辑地址时显示 */}
@@ -602,6 +599,7 @@ export default function LemonadeApp() {
           onChangeText={setBudget}
           animationValue={inputSectionAnimation}
           onSubmitEditing={editingStep === 3 ? handleFinishEditing : undefined}
+          errorMessage={inputError}
         />
       );
     }
@@ -624,6 +622,7 @@ export default function LemonadeApp() {
           selectedIds={selectedPreferences}
           onSelectionChange={setSelectedPreferences}
           animationValue={inputSectionAnimation}
+          singleSelect={true}
         />
       );
     }
@@ -724,11 +723,12 @@ export default function LemonadeApp() {
                       index={index}
                       questionAnimation={questionAnimations[Math.max(0, index)] || new Animated.Value(1)}
                       answerAnimation={answerAnimations[Math.max(0, index)] || new Animated.Value(1)}
-                      onEdit={() => index >= 0 ? handleEditAnswer(index) : null} // 手机号不可编辑
+                      onEdit={() => handleEditAnswer(index)}
                       formatAnswerDisplay={formatAnswerDisplay}
                       isEditing={isCurrentlyEditing}
                       editingInput={isCurrentlyEditing ? renderCurrentInput() : undefined}
                       editingButtons={isCurrentlyEditing ? renderActionButton() : undefined}
+                      canEdit={index >= 0} // 手机号（index: -1）不可编辑
                     />
                   );
                 })}
