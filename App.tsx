@@ -27,6 +27,7 @@ import { PaymentComponent } from './src/components/PaymentComponent';
 import { UserMenu } from './src/components/UserMenu';
 import { InviteModal } from './src/components/InviteModal';
 
+
 // Services - 移除鉴权相关API导入，因为AuthComponent已经包含
 // import { sendVerificationCode, verifyCodeAndLogin } from './src/services/api';
 import { createOrder, submitOrder } from './src/services/api';
@@ -49,7 +50,7 @@ import type { CompletedAnswers, InputFocus, Answer } from './src/types';
 
 // Styles
 import { globalStyles, rightContentStyles } from './src/styles/globalStyles';
-import { TIMING } from './src/constants';
+import { TIMING, DEV_CONFIG } from './src/constants';
 
 export default function LemonadeApp() {
   // State - 移除鉴权相关状态，由AuthComponent管理
@@ -66,6 +67,7 @@ export default function LemonadeApp() {
   const [otherPreferenceText, setOtherPreferenceText] = useState('');
   const [showMap, setShowMap] = useState(false);
   const [isAddressConfirmed, setIsAddressConfirmed] = useState(false);
+  const [selectedAddressSuggestion, setSelectedAddressSuggestion] = useState<AddressSuggestion | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [completedAnswers, setCompletedAnswers] = useState<CompletedAnswers>({});
   const [editingStep, setEditingStep] = useState<number | null>(null);
@@ -190,6 +192,24 @@ export default function LemonadeApp() {
   }, []);
 
   useEffect(() => {
+    // 开发模式自动认证
+    if (DEV_CONFIG.SKIP_AUTH && !isAuthenticated) {
+      const mockAuthResult: AuthResult = {
+        success: true,
+        isNewUser: DEV_CONFIG.MOCK_USER.is_new_user,
+        userId: DEV_CONFIG.MOCK_USER.user_id,
+        phoneNumber: DEV_CONFIG.MOCK_USER.phone_number,
+        message: '开发模式自动登录'
+      };
+      
+      // 延迟一点时间让UI渲染
+      setTimeout(() => {
+        handleAuthSuccess(mockAuthResult);
+      }, 100);
+      
+      return;
+    }
+    
     // 只在非编辑模式下触发打字机效果
     if (editingStep === null && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
       inputSectionAnimation.setValue(0);
@@ -204,7 +224,7 @@ export default function LemonadeApp() {
         typeText(newMessage, 80);
       }, 10); // 很短的延迟确保第一个字符已经设置
     }
-  }, [currentStep, completedAnswers, editingStep]);
+  }, [currentStep, completedAnswers, editingStep, isAuthenticated]);
 
   // Handle editing mode - skip typewriter effect and set up immediately
   useEffect(() => {
@@ -316,7 +336,7 @@ export default function LemonadeApp() {
     // 编辑模式下使用编辑步骤，否则使用当前步骤
     const stepToUse = editingStep !== null ? editingStep : currentStep;
     switch (stepToUse) {
-      case 0: return { type: 'address', value: address }; // 地址
+      case 0: return { type: 'address', value: address };
       case 1: {
         // 将选中的食物类型ID转换为中文标签
         const foodTypeLabels = selectedFoodType.map(id => {
@@ -406,11 +426,22 @@ export default function LemonadeApp() {
     }
   };
 
-  // Event handlers
-  // handleSendVerificationCode 和 handleVerifyCode 已移动到 AuthComponent
+  const handleAddressChange = (text: string) => {
+    setAddress(text);
+    // 如果用户手动修改地址，清除选中的建议
+    if (selectedAddressSuggestion && text !== selectedAddressSuggestion.description) {
+      setSelectedAddressSuggestion(null);
+    }
+  };
+
+  const handleSelectAddress = (suggestion: AddressSuggestion) => {
+    setSelectedAddressSuggestion(suggestion);
+    setAddress(suggestion.description);
+    console.log('地址已选择:', suggestion.description); // 调试日志
+  };
 
   const handleAddressConfirm = () => {
-    if (!validateInput(1, address).isValid) {
+    if (!validateInput(0, address).isValid) {
       triggerShake();
       return;
     }
@@ -783,22 +814,14 @@ export default function LemonadeApp() {
     if (stepData.showAddressInput) {
       return (
         <View>
-          <BaseInput
+          <AddressAutocomplete
             value={address}
-            onChangeText={(text) => {
-              if (!isAddressConfirmed || editingStep === 0) {
-                setAddress(text);
-              }
-            }}
+            onChangeText={handleAddressChange}
+            onSelectAddress={handleSelectAddress}
             placeholder="请输入地址"
             iconName="location-on"
             editable={!isAddressConfirmed || editingStep === 0}
             isDisabled={isAddressConfirmed && editingStep !== 0}
-            showClearButton={!isAddressConfirmed || editingStep === 0}
-            showEditButton={isAddressConfirmed && editingStep !== 0}
-            onClear={() => setAddress('')}
-            onEdit={handleEditAddress}
-            onSubmitEditing={editingStep === 0 ? handleFinishEditing : handleAddressConfirm}
             animationValue={inputSectionAnimation}
             errorMessage={inputError}
           />
@@ -1024,15 +1047,27 @@ export default function LemonadeApp() {
                   emotionAnimation={emotionAnimation}
                   shakeAnimation={shakeAnimation}
                 >
-                  <AuthComponent
-                    onAuthSuccess={handleAuthSuccess}
-                    onError={handleAuthError}
-                    onQuestionChange={handleAuthQuestionChange}
-                    animationValue={inputSectionAnimation}
-                    validatePhoneNumber={validatePhoneNumber}
-                    triggerShake={triggerShake}
-                    changeEmotion={changeEmotion}
-                  />
+                  {DEV_CONFIG.SKIP_AUTH ? (
+                    <DevAuthComponent
+                      onAuthSuccess={handleAuthSuccess}
+                      onError={handleAuthError}
+                      onQuestionChange={handleAuthQuestionChange}
+                      animationValue={inputSectionAnimation}
+                      validatePhoneNumber={validatePhoneNumber}
+                      triggerShake={triggerShake}
+                      changeEmotion={changeEmotion}
+                    />
+                  ) : (
+                    <AuthComponent
+                      onAuthSuccess={handleAuthSuccess}
+                      onError={handleAuthError}
+                      onQuestionChange={handleAuthQuestionChange}
+                      animationValue={inputSectionAnimation}
+                      validatePhoneNumber={validatePhoneNumber}
+                      triggerShake={triggerShake}
+                      changeEmotion={changeEmotion}
+                    />
+                  )}
                 </CurrentQuestion>
               )}
 

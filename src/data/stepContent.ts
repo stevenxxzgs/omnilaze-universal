@@ -3,7 +3,7 @@ import { StepContent } from '../types';
 export const STEP_CONTENT: StepContent[] = [
   {
     message: "你想在哪里收到你的外卖？",
-    showAddressInput: true,
+    showAddressInput: true, 
     inputType: "address"
   },
   {

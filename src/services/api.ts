@@ -1,4 +1,20 @@
-// API服务层 - 处理与后端验证码系统的通信
+/**
+ * API服务层 - 处理与后端验证码系统和地址搜索的通信
+ * 
+ * 功能模块：
+ * 1. 手机验证码发送和验证
+ * 2. 邀请码验证和用户创建  
+ * 3. 高德地图地址搜索（核心功能）
+ * 
+ * 地址搜索优化策略：
+ * - 至少4个汉字才开始搜索
+ * - 500ms防抖延迟减少API调用
+ * - 5分钟智能缓存机制
+ * - 最多返回8个建议
+ * - API失败时不显示模拟数据
+ */
+
+import { ENV_CONFIG } from '../config/env';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -20,7 +36,6 @@ export interface InviteCodeResponse {
   user_id?: string;
   phone_number?: string;
 }
-
 export interface OrderData {
   address: string;
   allergies: string[];
@@ -71,6 +86,7 @@ const getApiBaseUrl = () => {
 };
 
 const API_BASE_URL = getApiBaseUrl();
+
 
 /**
  * 发送手机验证码
@@ -168,6 +184,148 @@ export async function verifyInviteCodeAndCreateUser(phoneNumber: string, inviteC
 }
 
 /**
+
+ * 搜索地址建议 - 集成高德地图API
+ * 优化策略：
+ * 1. 最少输入4个汉字才开始搜索
+ * 2. 防抖延迟500ms减少API调用
+ * 3. 缓存搜索结果，相同关键词不重复调用
+ * 4. 最多返回8个建议减少界面复杂度
+ */
+
+// 缓存搜索结果
+const searchCache = new Map<string, { results: AddressSuggestion[], timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
+
+export async function searchAddresses(query: string): Promise<AddressSearchResponse> {
+  try {
+    // 输入验证：至少4个汉字
+    const trimmedQuery = query.trim();
+    const chineseCharCount = (trimmedQuery.match(/[\u4e00-\u9fff]/g) || []).length;
+    
+    if (!trimmedQuery || chineseCharCount < 4) {
+      return {
+        success: true,
+        message: '请至少输入4个汉字',
+        predictions: []
+      };
+    }
+
+    const keywords = trimmedQuery;
+
+    // 检查缓存
+    const cached = searchCache.get(keywords);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+      return {
+        success: true,
+        message: '搜索成功（缓存）',
+        predictions: cached.results
+      };
+    }
+
+    // 调用高德地图API
+    // 使用配置的API Key
+    const AMAP_KEY = ENV_CONFIG.AMAP_KEY;
+
+    console.log('高德API Key状态:', AMAP_KEY ? '已配置' : '未配置');
+
+    if (!AMAP_KEY) {
+      console.warn('高德地图API Key未配置，使用模拟数据');
+      return getFallbackResults(keywords);
+    }
+
+    const response = await fetch(`https://restapi.amap.com/v3/assistant/inputtips?key=${AMAP_KEY}&keywords=${encodeURIComponent(keywords)}`);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // 检查高德API返回状态
+    if (data.status !== '1') {
+      console.error('高德API错误:', data.info);
+      return getFallbackResults(keywords);
+    }
+
+    // 转换高德API数据格式为我们的格式
+    const suggestions: AddressSuggestion[] = (data.tips || [])
+      .slice(0, 8) // 最多8个建议
+      .map((tip: any, index: number) => ({
+        place_id: tip.id || `${keywords}_${index}`,
+        description: formatAddress(tip),
+        structured_formatting: {
+          main_text: tip.name || keywords,
+          secondary_text: formatSecondaryText(tip)
+        }
+      }));
+
+    // 缓存结果
+    searchCache.set(keywords, {
+      results: suggestions,
+      timestamp: Date.now()
+    });
+
+    // 清理过期缓存（简单的内存管理）
+    if (searchCache.size > 100) {
+      const now = Date.now();
+      for (const [key, value] of searchCache.entries()) {
+        if (now - value.timestamp > CACHE_DURATION) {
+          searchCache.delete(key);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: '搜索成功',
+      predictions: suggestions
+    };
+
+  } catch (error) {
+    console.error('地址搜索错误:', error);
+
+    // 降级处理：返回模拟数据
+    return getFallbackResults(query.trim());
+  }
+}
+
+/**
+ * 格式化地址显示
+ */
+function formatAddress(tip: any): string {
+  const parts = [];
+
+  if (tip.name) parts.push(tip.name);
+  if (tip.address && tip.address !== tip.name) parts.push(tip.address);
+  if (tip.district) parts.push(tip.district);
+
+  return parts.join(', ') || tip.name || '未知地址';
+}
+
+/**
+ * 格式化次要文本
+ */
+function formatSecondaryText(tip: any): string {
+  const parts = [];
+
+  if (tip.address && tip.address !== tip.name) parts.push(tip.address);
+  if (tip.district) parts.push(tip.district);
+
+  return parts.join(', ') || '详细地址';
+}
+
+/**
+ * 降级处理：API失败时的模拟数据
+ */
+function getFallbackResults(keywords: string): AddressSearchResponse {
+  // 不再提供模拟的"街道、大道"数据，直接返回空结果
+  return {
+    success: true,
+    message: '搜索服务暂时不可用，请稍后重试',
+    predictions: []
+  };
+=======
  * 创建订单
  */
 export async function createOrder(userId: string, phoneNumber: string, formData: OrderData): Promise<CreateOrderResponse> {
@@ -291,4 +449,5 @@ export async function getUserOrders(userId: string): Promise<OrdersResponse> {
       count: 0
     };
   }
+
 }

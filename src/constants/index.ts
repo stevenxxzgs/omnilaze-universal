@@ -46,9 +46,8 @@ export const BUDGET_OPTIONS = ['30', '50', '100', '200'] as const;
 
 export const STEP_TITLES = [
   "配送地址",
-  "联系方式", 
   "忌口说明",
-  "口味偏好",
+  "口味偏好", 
   "预算设置"
 ] as const;
 
@@ -59,4 +58,15 @@ export const VALIDATION = {
   MAX_PHONE_LENGTH: 11,
   CHARACTERS_PER_LINE: 20,
   ANSWER_CHARACTERS_PER_LINE: 25,
+} as const;
+
+export const DEV_CONFIG = {
+  // 开发模式：设置为true时跳过JWT认证
+  SKIP_AUTH: true,
+  // 开发模式下的模拟用户信息
+  MOCK_USER: {
+    user_id: 'dev_user_123',
+    phone_number: '13800138000',
+    is_new_user: false,
+  },
 } as const;
