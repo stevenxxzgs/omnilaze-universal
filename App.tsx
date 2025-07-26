@@ -22,7 +22,9 @@ import { BudgetInput } from './src/components/BudgetInput';
 import { MapComponent } from './src/components/MapComponent';
 import { ActionButton } from './src/components/ActionButton';
 import { ImageCheckbox } from './src/components/ImageCheckbox';
-import { AuthComponent, AuthResult } from './src/components/AuthComponent';
+import { AuthComponent } from './src/components/AuthComponent';
+import { DevAuthComponent } from './src/components/DevAuthComponent';
+import { AddressAutocomplete } from './src/components/AddressAutocomplete';
 import { PaymentComponent } from './src/components/PaymentComponent';
 import { UserMenu } from './src/components/UserMenu';
 import { InviteModal } from './src/components/InviteModal';
@@ -30,7 +32,7 @@ import { InviteModal } from './src/components/InviteModal';
 
 // Services - 移除鉴权相关API导入，因为AuthComponent已经包含
 // import { sendVerificationCode, verifyCodeAndLogin } from './src/services/api';
-import { createOrder, submitOrder } from './src/services/api';
+import { createOrder, submitOrder, getTencentStaticMapUrl } from './src/services/api';
 
 // Utils
 import { CookieManager } from './src/utils/cookieManager';
@@ -39,7 +41,6 @@ import { CookieManager } from './src/utils/cookieManager';
 import { 
   useTypewriterEffect, 
   useValidation, 
-  useScrollCalculation, 
   useAnimations 
 } from './src/hooks';
 
@@ -47,7 +48,7 @@ import {
 import { STEP_CONTENT } from './src/data/stepContent';
 import { ALLERGY_OPTIONS, PREFERENCE_OPTIONS, FOOD_TYPE_OPTIONS } from './src/data/checkboxOptions';
 import { BUDGET_OPTIONS_FOOD, BUDGET_OPTIONS_DRINK } from './src/constants';
-import type { CompletedAnswers, InputFocus, Answer } from './src/types';
+import type { CompletedAnswers, InputFocus, Answer, AddressSuggestion, AuthResult, StepContent } from './src/types';
 
 // Styles
 import { globalStyles, rightContentStyles } from './src/styles/globalStyles';
@@ -69,6 +70,8 @@ export default function LemonadeApp() {
   const [showMap, setShowMap] = useState(false);
   const [isAddressConfirmed, setIsAddressConfirmed] = useState(false);
   const [selectedAddressSuggestion, setSelectedAddressSuggestion] = useState<AddressSuggestion | null>(null);
+  const [addressLocation, setAddressLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [staticMapUrl, setStaticMapUrl] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [completedAnswers, setCompletedAnswers] = useState<CompletedAnswers>({});
   const [editingStep, setEditingStep] = useState<number | null>(null);
@@ -124,6 +127,9 @@ export default function LemonadeApp() {
     setOtherPreferenceText('');
     setIsAddressConfirmed(false);
     setShowMap(false);
+    setSelectedAddressSuggestion(null);
+    setAddressLocation(null);
+    setStaticMapUrl(null);
     setCurrentOrderId(null);
     setIsOrderSubmitting(false);
     setIsSearchingRestaurant(false);
@@ -175,6 +181,7 @@ export default function LemonadeApp() {
       // 自动登录
       setIsAuthenticated(true);
       setAuthResult({
+        success: true,
         userId: savedSession.userId,
         phoneNumber: savedSession.phoneNumber,
         isNewUser: savedSession.isNewUser
@@ -194,6 +201,9 @@ export default function LemonadeApp() {
         setOtherPreferenceText(savedConversation.otherPreferenceText || '');
         setIsAddressConfirmed(savedConversation.isAddressConfirmed || false);
         setShowMap(savedConversation.showMap || false);
+        setSelectedAddressSuggestion(savedConversation.selectedAddressSuggestion || null);
+        setAddressLocation(savedConversation.addressLocation || null);
+        setStaticMapUrl(savedConversation.staticMapUrl || null);
         
         // 恢复地图动画状态
         if (savedConversation.showMap) {
@@ -284,7 +294,7 @@ export default function LemonadeApp() {
     console.log('鉴权成功:', result);
     
     // 鉴权成功后，添加手机号作为第一个完成的答案
-    const phoneAnswer = { type: 'phone', value: result.phoneNumber };
+    const phoneAnswer: Answer = { type: 'phone' as const, value: result.phoneNumber };
     setCompletedAnswers({ [-1]: phoneAnswer }); // 使用-1作为手机号步骤的索引
     
     // 开始订单收集流程
@@ -308,7 +318,10 @@ export default function LemonadeApp() {
         otherAllergyText,
         otherPreferenceText,
         isAddressConfirmed,
-        showMap
+        showMap,
+        selectedAddressSuggestion,
+        addressLocation,
+        staticMapUrl
       };
       CookieManager.saveConversationState(conversationState);
     }
@@ -319,7 +332,7 @@ export default function LemonadeApp() {
     if (isAuthenticated) {
       saveConversationState();
     }
-  }, [currentStep, completedAnswers, address, budget, selectedAllergies, selectedPreferences, selectedFoodType, otherAllergyText, otherPreferenceText, isAddressConfirmed, showMap]);
+  }, [currentStep, completedAnswers, address, budget, selectedAllergies, selectedPreferences, selectedFoodType, otherAllergyText, otherPreferenceText, isAddressConfirmed, showMap, selectedAddressSuggestion, addressLocation, staticMapUrl]);
   
   // 鉴权问题文本变化回调
   const handleAuthQuestionChange = (question: string) => {
@@ -333,13 +346,13 @@ export default function LemonadeApp() {
   };
 
   // Helper functions
-  const getCurrentStepData = () => {
+  const getCurrentStepData = (): StepContent => {
     if (!isAuthenticated) {
       // 未鉴权时显示动态的鉴权问题文本
       return {
         message: authQuestionText,
         showPhoneInput: true,
-        inputType: 'phone'
+        inputType: 'phone' as const
       };
     }
     
@@ -364,14 +377,14 @@ export default function LemonadeApp() {
     // 编辑模式下使用编辑步骤，否则使用当前步骤
     const stepToUse = editingStep !== null ? editingStep : currentStep;
     switch (stepToUse) {
-      case 0: return { type: 'address', value: address };
+      case 0: return { type: 'address' as const, value: address };
       case 1: {
         // 将选中的食物类型ID转换为中文标签
         const foodTypeLabels = selectedFoodType.map(id => {
           const option = FOOD_TYPE_OPTIONS.find(opt => opt.id === id);
           return option ? option.label : id;
         });
-        return { type: 'foodType', value: foodTypeLabels.length > 0 ? foodTypeLabels.join(', ') : '未选择' };
+        return { type: 'foodType' as const, value: foodTypeLabels.length > 0 ? foodTypeLabels.join(', ') : '未选择' };
       }
       case 2: {
         // 将选中的过敏原ID转换为中文标签，如果选择了"其他"则包含用户输入的内容
@@ -382,7 +395,7 @@ export default function LemonadeApp() {
           const option = ALLERGY_OPTIONS.find(opt => opt.id === id);
           return option ? option.label : id;
         });
-        return { type: 'allergy', value: allergyLabels.length > 0 ? allergyLabels.join(', ') : '无忌口' };
+        return { type: 'allergy' as const, value: allergyLabels.length > 0 ? allergyLabels.join(', ') : '无忌口' };
       }
       case 3: {
         // 将选中的偏好ID转换为中文标签，如果选择了"其他"则包含用户输入的内容
@@ -393,9 +406,9 @@ export default function LemonadeApp() {
           const option = PREFERENCE_OPTIONS.find(opt => opt.id === id);
           return option ? option.label : id;
         });
-        return { type: 'preference', value: preferenceLabels.length > 0 ? preferenceLabels.join(', ') : '无特殊偏好' };
+        return { type: 'preference' as const, value: preferenceLabels.length > 0 ? preferenceLabels.join(', ') : '无特殊偏好' };
       }
-      case 4: return { type: 'budget', value: budget }; // 预算
+      case 4: return { type: 'budget' as const, value: budget }; // 预算
       default: return null;
     }
   };
@@ -465,6 +478,13 @@ export default function LemonadeApp() {
   const handleSelectAddress = (suggestion: AddressSuggestion) => {
     setSelectedAddressSuggestion(suggestion);
     setAddress(suggestion.description);
+    
+    // 保存经纬度信息
+    if (suggestion.location) {
+      setAddressLocation(suggestion.location);
+      console.log('地址经纬度:', suggestion.location);
+    }
+    
     console.log('地址已选择:', suggestion.description); // 调试日志
   };
 
@@ -476,6 +496,13 @@ export default function LemonadeApp() {
     
     setIsAddressConfirmed(true);
     changeEmotion('✅');
+    
+    // 如果有经纬度信息，生成静态地图URL
+    if (addressLocation) {
+      const mapUrl = getTencentStaticMapUrl(addressLocation.lat, addressLocation.lng);
+      setStaticMapUrl(mapUrl);
+      console.log('生成静态地图URL:', mapUrl);
+    }
     
     Animated.timing(mapAnimation, {
       toValue: 1,
@@ -635,6 +662,9 @@ export default function LemonadeApp() {
     setIsAddressConfirmed(false);
     setShowMap(false);
     setAddress('');
+    setSelectedAddressSuggestion(null);
+    setAddressLocation(null);
+    setStaticMapUrl(null);
     mapAnimation.setValue(0);
   };
 
@@ -865,7 +895,6 @@ export default function LemonadeApp() {
             editable={!isAddressConfirmed || editingStep === 0}
             isDisabled={isAddressConfirmed && editingStep !== 0}
             animationValue={inputSectionAnimation}
-            errorMessage={inputError}
           />
           
           {/* Map Container - 编辑地址时显示 */}
@@ -884,7 +913,12 @@ export default function LemonadeApp() {
               ]}
             >
               <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginTop: 16 }}>
-                <MapComponent showMap={showMap} mapAnimation={mapAnimation} />
+                <MapComponent 
+                  showMap={showMap} 
+                  mapAnimation={mapAnimation} 
+                  staticMapUrl={staticMapUrl}
+                  address={address}
+                />
               </View>
             </Animated.View>
           )}
@@ -1119,61 +1153,51 @@ export default function LemonadeApp() {
 
               {/* Current Question - 正常流程、搜索状态显示 */}
               {isAuthenticated && editingStep === null && (
-                // 如果正在搜索餐厅，只显示搜索文本，不显示其他内容
-                isSearchingRestaurant ? (
-                  <CurrentQuestion
-                    displayedText={displayedText}
-                    isTyping={isTyping}
-                    showCursor={showCursor}
-                    inputError={inputError}
-                    currentStep={currentStep}
-                    currentQuestionAnimation={currentQuestionAnimation}
-                    emotionAnimation={emotionAnimation}
-                    shakeAnimation={shakeAnimation}
-                  >
-                    {/* 搜索状态时不显示任何输入组件或按钮 */}
-                  </CurrentQuestion>
-                ) : (
-                  (currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) && (
-                    <CurrentQuestion
-                      displayedText={displayedText}
-                      isTyping={isTyping}
-                      showCursor={showCursor}
-                      inputError={inputError}
-                      currentStep={editingStep !== null ? editingStep : currentStep}
-                      currentQuestionAnimation={currentQuestionAnimation}
-                      emotionAnimation={emotionAnimation}
-                      shakeAnimation={shakeAnimation}
+                ((currentStep < STEP_CONTENT.length && !completedAnswers[currentStep] && !STEP_CONTENT[currentStep]?.showPayment) ||
+                isSearchingRestaurant)
+              ) && (
+                <CurrentQuestion
+                  displayedText={displayedText}
+                  isTyping={isTyping}
+                  showCursor={showCursor}
+                  inputError={inputError}
+                  currentStep={editingStep !== null ? editingStep : currentStep}
+                  currentQuestionAnimation={currentQuestionAnimation}
+                  emotionAnimation={emotionAnimation}
+                  shakeAnimation={shakeAnimation}
+                >
+                  {/* Map Container - 地址确认时显示（现在是第0步） */}
+                  {showMap && (currentStep === 0 || editingStep === 0) && editingStep === null && (
+                    <Animated.View 
+                      style={[
+                        {
+                          opacity: mapAnimation,
+                          transform: [{
+                            translateY: mapAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [16, 0],
+                            }),
+                          }],
+                        },
+                      ]}
                     >
-                      {/* Map Container - 地址确认时显示（现在是第0步） */}
-                      {showMap && (currentStep === 0 || editingStep === 0) && editingStep === null && (
-                        <Animated.View 
-                          style={[
-                            {
-                              opacity: mapAnimation,
-                              transform: [{
-                                translateY: mapAnimation.interpolate({
-                                  inputRange: [0, 1],
-                                  outputRange: [16, 0],
-                                }),
-                              }],
-                            },
-                          ]}
-                        >
-                          <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
-                            <MapComponent showMap={showMap} mapAnimation={mapAnimation} />
-                          </View>
-                        </Animated.View>
-                      )}
+                      <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
+                        <MapComponent 
+                          showMap={showMap} 
+                          mapAnimation={mapAnimation} 
+                          staticMapUrl={staticMapUrl}
+                          address={address}
+                        />
+                      </View>
+                    </Animated.View>
+                  )}
 
-                      {/* Input Section */}
-                      {renderCurrentInput()}
+                  {/* Input Section */}
+                  {renderCurrentInput()}
 
-                      {/* Action Button */}
-                      {renderActionButton()}
-                    </CurrentQuestion>
-                  )
-                )
+                  {/* Action Button */}
+                  {renderActionButton()}
+                </CurrentQuestion>
               )}
             </View>
           </View>

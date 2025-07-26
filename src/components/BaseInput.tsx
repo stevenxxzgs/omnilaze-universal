@@ -85,7 +85,7 @@ export const BaseInput: React.FC<BaseInputProps> = ({
           style={[
             inputStyles.simpleTextInput,
             multiline && inputStyles.multilineInput,
-            { outline: 'none', outlineWidth: 0 }
+            { outlineWidth: 0 }
           ] as any}
           placeholder={placeholder}
           value={value}

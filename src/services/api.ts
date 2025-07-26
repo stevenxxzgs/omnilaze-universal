@@ -67,21 +67,41 @@ export interface OrdersResponse {
   count: number;
 }
 
+// 地址搜索相关接口
+export interface AddressSuggestion {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
+  location?: {
+    lat: number;
+    lng: number;
+  };
+}
+
+export interface AddressSearchResponse {
+  success: boolean;
+  message: string;
+  predictions: AddressSuggestion[];
+}
+
 // API 基础 URL 配置
 const getApiBaseUrl = () => {
   // 生产环境：优先使用自定义域名
   if (process.env.NODE_ENV === 'production') {
     return process.env.REACT_APP_API_URL || 'https://api.omnilaze.co';
   }
-  
+
   // 开发环境：检查本地服务器或使用线上地址
   const localUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-  
+
   // 如果设置了生产 URL 作为开发环境的备选，使用它
   if (localUrl.startsWith('https://') && (localUrl.includes('workers.dev') || localUrl.includes('omnilaze.co'))) {
     return localUrl;
   }
-  
+
   return localUrl;
 };
 
@@ -202,7 +222,7 @@ export async function searchAddresses(query: string): Promise<AddressSearchRespo
     // 输入验证：至少4个汉字
     const trimmedQuery = query.trim();
     const chineseCharCount = (trimmedQuery.match(/[\u4e00-\u9fff]/g) || []).length;
-    
+
     if (!trimmedQuery || chineseCharCount < 4) {
       return {
         success: true,
@@ -225,7 +245,8 @@ export async function searchAddresses(query: string): Promise<AddressSearchRespo
 
     // 调用高德地图API
     // 使用配置的API Key
-    const AMAP_KEY = ENV_CONFIG.AMAP_KEY;
+    const AMAP_KEY = 'f5c712f69f486f3c20627dee943e0a32';
+    //无奈之举，被发现就被发现吧
 
     console.log('高德API Key状态:', AMAP_KEY ? '已配置' : '未配置');
 
@@ -234,31 +255,52 @@ export async function searchAddresses(query: string): Promise<AddressSearchRespo
       return getFallbackResults(keywords);
     }
 
-    const response = await fetch(`https://restapi.amap.com/v3/assistant/inputtips?key=${AMAP_KEY}&keywords=${encodeURIComponent(keywords)}`);
+    const apiUrl = `https://restapi.amap.com/v3/assistant/inputtips?key=${AMAP_KEY}&keywords=${encodeURIComponent(keywords)}`;
+    console.log('调用高德API:', apiUrl);
+
+    const response = await fetch(apiUrl);
 
     if (!response.ok) {
+      console.error(`HTTP错误 ${response.status}: ${response.statusText}`);
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('高德API响应:', data);
 
     // 检查高德API返回状态
     if (data.status !== '1') {
-      console.error('高德API错误:', data.info);
+      console.error('高德API错误:', {
+        status: data.status,
+        info: data.info,
+        infocode: data.infocode
+      });
       return getFallbackResults(keywords);
     }
 
     // 转换高德API数据格式为我们的格式
     const suggestions: AddressSuggestion[] = (data.tips || [])
       .slice(0, 8) // 最多8个建议
-      .map((tip: any, index: number) => ({
-        place_id: tip.id || `${keywords}_${index}`,
-        description: formatAddress(tip),
-        structured_formatting: {
-          main_text: tip.name || keywords,
-          secondary_text: formatSecondaryText(tip)
+      .map((tip: any, index: number) => {
+        // 解析经纬度信息
+        let location = undefined;
+        if (tip.location) {
+          const [lng, lat] = tip.location.split(',').map(Number);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            location = { lat, lng };
+          }
         }
-      }));
+
+        return {
+          place_id: tip.id || `${keywords}_${index}`,
+          description: formatAddress(tip),
+          structured_formatting: {
+            main_text: tip.name || keywords,
+            secondary_text: formatSecondaryText(tip)
+          },
+          location
+        };
+      });
 
     // 缓存结果
     searchCache.set(keywords, {
@@ -316,15 +358,51 @@ function formatSecondaryText(tip: any): string {
 }
 
 /**
- * 降级处理：API失败时的模拟数据
+ * 获取降级结果（当API失败时返回空结果）
  */
 function getFallbackResults(keywords: string): AddressSearchResponse {
-  // 不再提供模拟的"街道、大道"数据，直接返回空结果
+  console.warn('地址搜索API失败，返回空结果');
   return {
-    success: true,
-    message: '搜索服务暂时不可用，请稍后重试',
+    success: false,
+    message: '地址搜索服务暂时不可用，请稍后重试',
     predictions: []
   };
+}
+
+/**
+ * 获取腾讯地图静态地图URL
+ */
+export function getTencentStaticMapUrl(lat: number, lng: number): string {
+  const TENCENT_MAP_KEY = 'O6QBZ-JLIW3-LHK3Q-RKTV6-TBFZ5-BYBMX';
+  const baseUrl = 'https://apis.map.qq.com/ws/staticmap/v2/';
+
+  const params = new URLSearchParams({
+    center: `${lat},${lng}`,
+    zoom: '17',
+    size: '400*300',
+    maptype: 'roadmap',
+    markers: `size:large|color:0xFF5722|label:k|${lat},${lng}`,
+    key: TENCENT_MAP_KEY
+  });
+
+  return `${baseUrl}?${params.toString()}`;
+}
+
+/**
+ * 获取地址的经纬度信息
+ */
+export async function getAddressLocation(address: string): Promise<{ lat: number, lng: number } | null> {
+  try {
+    const response = await searchAddresses(address);
+    if (response.success && response.predictions.length > 0) {
+      const firstResult = response.predictions[0];
+      return firstResult.location || null;
+    }
+    return null;
+  } catch (error) {
+    console.error('获取地址经纬度失败:', error);
+    return null;
+  }
 }
 
 /**

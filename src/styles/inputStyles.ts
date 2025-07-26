@@ -24,7 +24,7 @@ export const inputStyles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 3,
-    outline: 'none',
+
     outlineWidth: 0,
   } as any,
   simpleInputIcon: {
@@ -42,7 +42,7 @@ export const inputStyles = StyleSheet.create({
     letterSpacing: 0.5,
     borderWidth: 0,
     outlineWidth: 0,
-    outline: 'none',
+
   } as any,
   disabledSimpleInputWrapper: {
     backgroundColor: '#F8F9FA',

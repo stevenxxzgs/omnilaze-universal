@@ -19,7 +19,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, Animated, Platform } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { inputStyles } from '../styles/inputStyles';
 import { addressAutocompleteStyles } from '../styles/addressStyles';
 import { searchAddresses, AddressSuggestion } from '../services/api';
@@ -105,15 +105,15 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
   const handleSelectSuggestion = (suggestion: AddressSuggestion) => {
     console.log('建议项被选择:', suggestion.description); // 调试日志
     
-    // 先隐藏建议列表
+    // 立即隐藏建议列表，防止重复点击
     setShowSuggestions(false);
     setSuggestions([]);
     
-    // 然后调用父组件的回调
-    onSelectAddress(suggestion);
-    
-    // 最后更新输入框文本（这个可能会被父组件的逻辑覆盖）
+    // 更新输入框文本
     onChangeText(suggestion.description);
+    
+    // 调用父组件的回调
+    onSelectAddress(suggestion);
   };
 
   const handleFocus = () => {
@@ -138,8 +138,8 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
     setTimeout(() => {
       setIsFocused(false);
       setShowSuggestions(false);
-      onBlur?.();
-    }, 200); // 增加延迟时间确保点击事件能够触发
+      onBlur && onBlur();
+    }, 300); // 进一步增加延迟时间确保点击事件能够触发
   };
 
   const handleClear = () => {
@@ -179,7 +179,13 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
         console.log('建议项被点击:', item.description); // 调试日志
         handleSelectSuggestion(item);
       }}
+      onPressIn={() => {
+        // 立即响应按下事件，提高敏感度
+        console.log('建议项按下:', item.description);
+      }}
       activeOpacity={0.7}
+      delayPressIn={0}
+      delayPressOut={0}
     >
       <MaterialIcons 
         name="location-on" 
@@ -227,7 +233,7 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
           <TextInput
             style={[
               inputStyles.simpleTextInput,
-              { outline: 'none', outlineWidth: 0 }
+              { outlineWidth: 0 }
             ] as any}
             placeholder={placeholder}
             value={value}
@@ -282,6 +288,7 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
                     keyboardShouldPersistTaps="always"
                     showsVerticalScrollIndicator={false}
                     nestedScrollEnabled={true}
+                    style={{ maxHeight: 200 }}
                   />
                 </View>
               </WebPortal>
@@ -291,10 +298,9 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
                   data={suggestions}
                   renderItem={renderSuggestion}
                   keyExtractor={(item) => item.place_id}
-                  style={addressAutocompleteStyles.suggestionsList}
+                  style={[addressAutocompleteStyles.suggestionsList, { maxHeight: 200 }]}
                   keyboardShouldPersistTaps="always"
                   showsVerticalScrollIndicator={false}
-                  maxHeight={200}
                   nestedScrollEnabled={true}
                 />
               </View>

@@ -1,6 +1,19 @@
 export interface Answer {
-  type: 'address' | 'phone' | 'budget' | 'allergy' | 'preference' | 'foodType';
+  type: 'address' | 'phone' | 'budget' | 'allergy' | 'preference' | 'foodType' | 'payment';
   value: string;
+}
+
+export interface AddressSuggestion {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
+  location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface CompletedAnswers {
@@ -18,6 +31,14 @@ export interface StepContent {
   showCompleted?: boolean;
   showPayment?: boolean;
   inputType: 'address' | 'phone' | 'budget' | 'allergy' | 'preference' | 'foodType' | 'completed' | 'payment';
+}
+
+export interface AuthResult {
+  success: boolean;
+  isNewUser: boolean;
+  userId?: string;
+  phoneNumber: string;
+  message?: string;
 }
 
 export interface InputFocus {
