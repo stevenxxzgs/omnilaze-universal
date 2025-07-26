@@ -23,6 +23,9 @@ import { MapComponent } from './src/components/MapComponent';
 import { ActionButton } from './src/components/ActionButton';
 import { ImageCheckbox } from './src/components/ImageCheckbox';
 
+// Services
+import { sendVerificationCode, verifyCodeAndLogin } from './src/services/api';
+
 // Hooks
 import { 
   useTypewriterEffect, 
@@ -209,36 +212,63 @@ export default function LemonadeApp() {
   };
 
   // Event handlers
-  const handleSendVerificationCode = () => {
+  const handleSendVerificationCode = async () => {
     if (!validatePhoneNumber(phoneNumber) || phoneNumber.length !== 11) {
       triggerShake();
       return;
     }
     
-    // 模拟发送验证码
-    setIsVerificationCodeSent(true);
-    setCountdown(180); // 3分钟倒计时
-    changeEmotion('📱');
-    
-    // 这里可以添加实际的API调用
-    console.log('发送验证码到:', phoneNumber);
+    try {
+      // 调用真实的API发送验证码
+      const result = await sendVerificationCode(phoneNumber);
+      
+      if (result.success) {
+        setIsVerificationCodeSent(true);
+        setCountdown(180); // 3分钟倒计时
+        changeEmotion('📱');
+        setInputError('');
+      } else {
+        setInputError(result.message);
+        triggerShake();
+      }
+    } catch (error) {
+      setInputError('发送验证码失败，请重试');
+      triggerShake();
+      console.error('发送验证码错误:', error);
+    }
   };
 
-  const handleVerifyCode = () => {
+  const handleVerifyCode = async () => {
     if (verificationCode.length !== 6) {
       setInputError('请输入6位验证码');
       triggerShake();
       return;
     }
     
-    // 模拟验证码验证（在实际项目中这里应该调用API）
-    if (verificationCode === '123456') {
-      setIsPhoneVerified(true);
-      setInputError('');
-      changeEmotion('✅');
-    } else {
-      setInputError('验证码错误，请重新输入');
+    try {
+      // 调用真实的API验证验证码并登录/注册
+      const result = await verifyCodeAndLogin(phoneNumber, verificationCode);
+      
+      if (result.success) {
+        setIsPhoneVerified(true);
+        setInputError('');
+        changeEmotion('✅');
+        
+        // 可以在这里保存用户信息到本地存储
+        if  (result.user_id) {
+          localStorage.setItem('user_id', result.user_id);
+          localStorage.setItem('phone_number', result.phone_number || phoneNumber);
+        }
+        
+        console.log('登录成功, 用户ID:', result.user_id);
+      } else {
+        setInputError(result.message);
+        triggerShake();
+      }
+    } catch (error) {
+      setInputError('验证失败，请重试');
       triggerShake();
+      console.error('验证码验证错误:', error);
     }
   };
 
