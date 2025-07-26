@@ -1119,46 +1119,61 @@ export default function LemonadeApp() {
 
               {/* Current Question - 正常流程、搜索状态显示 */}
               {isAuthenticated && editingStep === null && (
-                (currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) ||
-                isSearchingRestaurant
-              ) && (
-                <CurrentQuestion
-                  displayedText={displayedText}
-                  isTyping={isTyping}
-                  showCursor={showCursor}
-                  inputError={inputError}
-                  currentStep={editingStep !== null ? editingStep : currentStep}
-                  currentQuestionAnimation={currentQuestionAnimation}
-                  emotionAnimation={emotionAnimation}
-                  shakeAnimation={shakeAnimation}
-                >
-                  {/* Map Container - 地址确认时显示（现在是第0步） */}
-                  {showMap && (currentStep === 0 || editingStep === 0) && editingStep === null && (
-                    <Animated.View 
-                      style={[
-                        {
-                          opacity: mapAnimation,
-                          transform: [{
-                            translateY: mapAnimation.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [16, 0],
-                            }),
-                          }],
-                        },
-                      ]}
+                // 如果正在搜索餐厅，只显示搜索文本，不显示其他内容
+                isSearchingRestaurant ? (
+                  <CurrentQuestion
+                    displayedText={displayedText}
+                    isTyping={isTyping}
+                    showCursor={showCursor}
+                    inputError={inputError}
+                    currentStep={currentStep}
+                    currentQuestionAnimation={currentQuestionAnimation}
+                    emotionAnimation={emotionAnimation}
+                    shakeAnimation={shakeAnimation}
+                  >
+                    {/* 搜索状态时不显示任何输入组件或按钮 */}
+                  </CurrentQuestion>
+                ) : (
+                  (currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) && (
+                    <CurrentQuestion
+                      displayedText={displayedText}
+                      isTyping={isTyping}
+                      showCursor={showCursor}
+                      inputError={inputError}
+                      currentStep={editingStep !== null ? editingStep : currentStep}
+                      currentQuestionAnimation={currentQuestionAnimation}
+                      emotionAnimation={emotionAnimation}
+                      shakeAnimation={shakeAnimation}
                     >
-                      <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
-                        <MapComponent showMap={showMap} mapAnimation={mapAnimation} />
-                      </View>
-                    </Animated.View>
-                  )}
+                      {/* Map Container - 地址确认时显示（现在是第0步） */}
+                      {showMap && (currentStep === 0 || editingStep === 0) && editingStep === null && (
+                        <Animated.View 
+                          style={[
+                            {
+                              opacity: mapAnimation,
+                              transform: [{
+                                translateY: mapAnimation.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [16, 0],
+                                }),
+                              }],
+                            },
+                          ]}
+                        >
+                          <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
+                            <MapComponent showMap={showMap} mapAnimation={mapAnimation} />
+                          </View>
+                        </Animated.View>
+                      )}
 
-                  {/* Input Section */}
-                  {renderCurrentInput()}
+                      {/* Input Section */}
+                      {renderCurrentInput()}
 
-                  {/* Action Button */}
-                  {renderActionButton()}
-                </CurrentQuestion>
+                      {/* Action Button */}
+                      {renderActionButton()}
+                    </CurrentQuestion>
+                  )
+                )
               )}
             </View>
           </View>

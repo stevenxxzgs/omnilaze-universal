@@ -325,7 +325,9 @@ function getFallbackResults(keywords: string): AddressSearchResponse {
     message: '搜索服务暂时不可用，请稍后重试',
     predictions: []
   };
-=======
+}
+
+/**
  * 创建订单
  */
 export async function createOrder(userId: string, phoneNumber: string, formData: OrderData): Promise<CreateOrderResponse> {
