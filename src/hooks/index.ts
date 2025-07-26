@@ -9,6 +9,7 @@ export const useTypewriterEffect = () => {
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showCursor, setShowCursor] = useState(true);
+  const [currentTimer, setCurrentTimer] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const cursorInterval = setInterval(() => {
@@ -19,17 +20,21 @@ export const useTypewriterEffect = () => {
   }, []);
 
   const typeText = (text: string, speed: number = TIMING.TYPING_SPEED) => {
+    // 清除之前的定时器
+    if (currentTimer) {
+      clearInterval(currentTimer);
+      setCurrentTimer(null);
+    }
+    
     setIsTyping(true);
+    setDisplayedText(''); // 清空当前文本
     
-    // 立即显示第一个字符，避免任何闪烁
-    setDisplayedText(text.substring(0, 1));
-    
-    if (text.length <= 1) {
+    if (!text || text.length === 0) {
       setIsTyping(false);
       return;
     }
     
-    let index = 1;
+    let index = 0;
     const timer = setInterval(() => {
       if (index < text.length) {
         setDisplayedText(text.substring(0, index + 1));
@@ -37,11 +42,22 @@ export const useTypewriterEffect = () => {
       } else {
         setIsTyping(false);
         clearInterval(timer);
+        setCurrentTimer(null);
       }
     }, speed);
     
+    setCurrentTimer(timer);
     return timer;
   };
+
+  // 清理函数
+  useEffect(() => {
+    return () => {
+      if (currentTimer) {
+        clearInterval(currentTimer);
+      }
+    };
+  }, [currentTimer]);
 
   return {
     displayedText,

@@ -9,7 +9,8 @@ interface BudgetInputProps {
   onChangeText: (text: string) => void;
   animationValue?: Animated.Value;
   onSubmitEditing?: () => void;
-  errorMessage?: string; // 新增：错误信息
+  errorMessage?: string;
+  budgetOptions?: readonly string[]; // 新增：自定义预算选项
 }
 
 export const BudgetInput: React.FC<BudgetInputProps> = ({
@@ -17,7 +18,8 @@ export const BudgetInput: React.FC<BudgetInputProps> = ({
   onChangeText,
   animationValue,
   onSubmitEditing,
-  errorMessage, // 新增：错误信息
+  errorMessage,
+  budgetOptions = BUDGET_OPTIONS, // 默认使用标准预算选项
 }) => {
   const WrapperComponent = animationValue ? Animated.View : View;
   const wrapperProps = animationValue 
@@ -39,7 +41,7 @@ export const BudgetInput: React.FC<BudgetInputProps> = ({
   return (
     <WrapperComponent {...wrapperProps}>
       <View style={budgetStyles.budgetOptionsContainer}>
-        {BUDGET_OPTIONS.map((amount) => (
+        {budgetOptions.map((amount) => (
           <TouchableOpacity
             key={amount}
             onPress={() => onChangeText(amount)}

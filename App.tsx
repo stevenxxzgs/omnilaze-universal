@@ -46,6 +46,7 @@ import {
 // Data & Types
 import { STEP_CONTENT } from './src/data/stepContent';
 import { ALLERGY_OPTIONS, PREFERENCE_OPTIONS, FOOD_TYPE_OPTIONS } from './src/data/checkboxOptions';
+import { BUDGET_OPTIONS_FOOD, BUDGET_OPTIONS_DRINK } from './src/constants';
 import type { CompletedAnswers, InputFocus, Answer } from './src/types';
 
 // Styles
@@ -192,39 +193,16 @@ export default function LemonadeApp() {
   }, []);
 
   useEffect(() => {
-    // 开发模式自动认证
-    if (DEV_CONFIG.SKIP_AUTH && !isAuthenticated) {
-      const mockAuthResult: AuthResult = {
-        success: true,
-        isNewUser: DEV_CONFIG.MOCK_USER.is_new_user,
-        userId: DEV_CONFIG.MOCK_USER.user_id,
-        phoneNumber: DEV_CONFIG.MOCK_USER.phone_number,
-        message: '开发模式自动登录'
-      };
-      
-      // 延迟一点时间让UI渲染
-      setTimeout(() => {
-        handleAuthSuccess(mockAuthResult);
-      }, 100);
-      
-      return;
-    }
-    
-    // 只在非编辑模式下触发打字机效果
-    if (editingStep === null && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
+    // 只在非编辑模式下且已认证后触发打字机效果
+    if (editingStep === null && isAuthenticated && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
       inputSectionAnimation.setValue(0);
       currentQuestionAnimation.setValue(1);
       
-      // 立即设置新问题的第一个字符，避免显示旧问题文本造成的闪烁
+      // 直接调用typeText，让它处理所有逻辑
       const newMessage = getCurrentStepData().message;
-      setDisplayedText(newMessage.substring(0, 1));
-      
-      // 然后开始打字机效果（从第二个字符开始）
-      setTimeout(() => {
-        typeText(newMessage, 80);
-      }, 10); // 很短的延迟确保第一个字符已经设置
+      typeText(newMessage, TIMING.TYPING_SPEED);
     }
-  }, [currentStep, completedAnswers, editingStep, isAuthenticated]);
+  }, [currentStep, editingStep, isAuthenticated, selectedFoodType]); // 添加selectedFoodType依赖
 
   // Handle editing mode - skip typewriter effect and set up immediately
   useEffect(() => {
@@ -309,8 +287,11 @@ export default function LemonadeApp() {
   // 鉴权问题文本变化回调
   const handleAuthQuestionChange = (question: string) => {
     setAuthQuestionText(question);
-    // 触发打字机效果重新显示新问题
-    typeText(question, 80);
+    // 只有在未认证状态下才触发打字机效果，避免与主useEffect冲突
+    if (!isAuthenticated) {
+      // 直接调用typeText，让它处理清空和重新打字
+      typeText(question, TIMING.TYPING_SPEED);
+    }
   };
   
   // 鉴权错误回调
@@ -328,8 +309,22 @@ export default function LemonadeApp() {
         inputType: 'phone'
       };
     }
+    
     // 鉴权后开始正常流程
-    return STEP_CONTENT[currentStep];
+    const stepData = STEP_CONTENT[currentStep];
+    
+    // 特殊处理预算步骤，根据食物类型显示不同问题
+    if (stepData && stepData.inputType === 'budget') {
+      const isSelectedDrink = selectedFoodType.includes('drink');
+      return {
+        ...stepData,
+        message: isSelectedDrink 
+          ? "我可以花多少钱帮你买奶茶？" 
+          : "我可以花多少钱帮你点餐？"
+      };
+    }
+    
+    return stepData;
   };
 
   const getCurrentAnswer = (): Answer | null => {
@@ -564,7 +559,7 @@ export default function LemonadeApp() {
         
         setTimeout(() => {
           changeEmotion('🍕');
-          typeText('🎊 完美！订单已提交，正在为您匹配餐厅...', 40);
+          typeText('🎊 完美！订单已提交，正在为您匹配餐厅...', TIMING.TYPING_SPEED_FAST);
         }, TIMING.COMPLETION_DELAY);
       } else {
         setInputError(result.message);
@@ -592,14 +587,14 @@ export default function LemonadeApp() {
     
     // 显示搜索餐厅的文本
     setTimeout(() => {
-      typeText('正在为你寻找合适外卖...', 40);
+      typeText('正在为你寻找合适外卖...', TIMING.TYPING_SPEED_FAST);
     }, 500);
     
     // 模拟搜索过程，5秒后显示完成
     setTimeout(() => {
       setIsSearchingRestaurant(false);
       changeEmotion('🎉');
-      typeText('🎊 完美！已为您找到最合适的餐厅，订单已提交！', 40);
+      typeText('🎊 完美！已为您找到最合适的餐厅，订单已提交！', TIMING.TYPING_SPEED_FAST);
     }, 5000);
   };
 
@@ -706,11 +701,15 @@ export default function LemonadeApp() {
       if (editingStep === 1) {
         const isSelectedDrink = selectedFoodType.includes('drink');
         
+        // 清空预算，因为食物类型变化后预算范围可能不同
+        setBudget('');
+        
         if (isSelectedDrink) {
           // 如果改选为喝奶茶，需要清除之后的忌口和偏好答案，并跳转到当前最高有效步骤
           const newCompletedAnswers = { ...completedAnswers };
           delete newCompletedAnswers[2]; // 删除忌口答案
           delete newCompletedAnswers[3]; // 删除偏好答案
+          delete newCompletedAnswers[4]; // 删除预算答案
           setCompletedAnswers({
             ...newCompletedAnswers,
             [editingStep]: currentAnswer
@@ -728,7 +727,15 @@ export default function LemonadeApp() {
             setCurrentStep(4);
           }
         } else {
-          // 如果改选为吃饭，保持正常流程
+          // 如果改选为吃饭，也要清除预算答案重新填写
+          const newCompletedAnswers = { ...completedAnswers };
+          delete newCompletedAnswers[4]; // 删除预算答案
+          setCompletedAnswers({
+            ...newCompletedAnswers,
+            [editingStep]: currentAnswer
+          });
+          
+          // 保持正常流程
           if (currentStep > 1 && currentStep < 4) {
             // 如果当前在忌口到偏好之间，保持当前步骤
           } else if (currentStep >= 4) {
@@ -741,6 +748,8 @@ export default function LemonadeApp() {
       // 退出编辑模式
       setEditingStep(null);
       setOriginalAnswerBeforeEdit(null);
+      
+      // 主useEffect会自动处理步骤切换后的打字机效果，不需要手动调用
     }
   };
 
@@ -865,6 +874,10 @@ export default function LemonadeApp() {
     }
     
     if (stepData.showBudgetInput) {
+      // 根据食物类型选择预算选项
+      const isSelectedDrink = selectedFoodType.includes('drink');
+      const budgetOptions = isSelectedDrink ? BUDGET_OPTIONS_DRINK : BUDGET_OPTIONS_FOOD;
+      
       return (
         <BudgetInput
           value={budget}
@@ -872,6 +885,7 @@ export default function LemonadeApp() {
           animationValue={inputSectionAnimation}
           onSubmitEditing={editingStep === 4 ? handleFinishEditing : undefined}
           errorMessage={inputError}
+          budgetOptions={budgetOptions}
         />
       );
     }
@@ -1073,7 +1087,7 @@ export default function LemonadeApp() {
 
               {/* Current Question - 正常流程、搜索状态显示 */}
               {isAuthenticated && editingStep === null && (
-                (currentStep < STEP_CONTENT.length && !completedAnswers[currentStep] && !STEP_CONTENT[currentStep]?.showPayment) ||
+                (currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) ||
                 isSearchingRestaurant
               ) && (
                 <CurrentQuestion
