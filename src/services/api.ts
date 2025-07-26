@@ -75,6 +75,10 @@ export interface AddressSuggestion {
     main_text: string;
     secondary_text: string;
   };
+  location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface AddressSearchResponse {
@@ -241,7 +245,8 @@ export async function searchAddresses(query: string): Promise<AddressSearchRespo
 
     // 调用高德地图API
     // 使用配置的API Key
-    const AMAP_KEY = ENV_CONFIG.AMAP_KEY;
+    const AMAP_KEY = 'f5c712f69f486f3c20627dee943e0a32';
+    //无奈之举，被发现就被发现吧
 
     console.log('高德API Key状态:', AMAP_KEY ? '已配置' : '未配置');
 
@@ -252,7 +257,7 @@ export async function searchAddresses(query: string): Promise<AddressSearchRespo
 
     const apiUrl = `https://restapi.amap.com/v3/assistant/inputtips?key=${AMAP_KEY}&keywords=${encodeURIComponent(keywords)}`;
     console.log('调用高德API:', apiUrl);
-    
+
     const response = await fetch(apiUrl);
 
     if (!response.ok) {
@@ -276,14 +281,26 @@ export async function searchAddresses(query: string): Promise<AddressSearchRespo
     // 转换高德API数据格式为我们的格式
     const suggestions: AddressSuggestion[] = (data.tips || [])
       .slice(0, 8) // 最多8个建议
-      .map((tip: any, index: number) => ({
-        place_id: tip.id || `${keywords}_${index}`,
-        description: formatAddress(tip),
-        structured_formatting: {
-          main_text: tip.name || keywords,
-          secondary_text: formatSecondaryText(tip)
+      .map((tip: any, index: number) => {
+        // 解析经纬度信息
+        let location = undefined;
+        if (tip.location) {
+          const [lng, lat] = tip.location.split(',').map(Number);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            location = { lat, lng };
+          }
         }
-      }));
+
+        return {
+          place_id: tip.id || `${keywords}_${index}`,
+          description: formatAddress(tip),
+          structured_formatting: {
+            main_text: tip.name || keywords,
+            secondary_text: formatSecondaryText(tip)
+          },
+          location
+        };
+      });
 
     // 缓存结果
     searchCache.set(keywords, {
@@ -350,6 +367,42 @@ function getFallbackResults(keywords: string): AddressSearchResponse {
     message: '地址搜索服务暂时不可用，请稍后重试',
     predictions: []
   };
+}
+
+/**
+ * 获取腾讯地图静态地图URL
+ */
+export function getTencentStaticMapUrl(lat: number, lng: number): string {
+  const TENCENT_MAP_KEY = 'O6QBZ-JLIW3-LHK3Q-RKTV6-TBFZ5-BYBMX';
+  const baseUrl = 'https://apis.map.qq.com/ws/staticmap/v2/';
+
+  const params = new URLSearchParams({
+    center: `${lat},${lng}`,
+    zoom: '17',
+    size: '400*300',
+    maptype: 'roadmap',
+    markers: `size:large|color:0xFF5722|label:k|${lat},${lng}`,
+    key: TENCENT_MAP_KEY
+  });
+
+  return `${baseUrl}?${params.toString()}`;
+}
+
+/**
+ * 获取地址的经纬度信息
+ */
+export async function getAddressLocation(address: string): Promise<{ lat: number, lng: number } | null> {
+  try {
+    const response = await searchAddresses(address);
+    if (response.success && response.predictions.length > 0) {
+      const firstResult = response.predictions[0];
+      return firstResult.location || null;
+    }
+    return null;
+  } catch (error) {
+    console.error('获取地址经纬度失败:', error);
+    return null;
+  }
 }
 
 /**

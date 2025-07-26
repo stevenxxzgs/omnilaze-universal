@@ -10,6 +10,10 @@ export interface AddressSuggestion {
     main_text: string;
     secondary_text: string;
   };
+  location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface CompletedAnswers {

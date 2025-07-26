@@ -32,7 +32,7 @@ import { InviteModal } from './src/components/InviteModal';
 
 // Services - 移除鉴权相关API导入，因为AuthComponent已经包含
 // import { sendVerificationCode, verifyCodeAndLogin } from './src/services/api';
-import { createOrder, submitOrder } from './src/services/api';
+import { createOrder, submitOrder, getTencentStaticMapUrl } from './src/services/api';
 
 // Utils
 import { CookieManager } from './src/utils/cookieManager';
@@ -70,6 +70,8 @@ export default function LemonadeApp() {
   const [showMap, setShowMap] = useState(false);
   const [isAddressConfirmed, setIsAddressConfirmed] = useState(false);
   const [selectedAddressSuggestion, setSelectedAddressSuggestion] = useState<AddressSuggestion | null>(null);
+  const [addressLocation, setAddressLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [staticMapUrl, setStaticMapUrl] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [completedAnswers, setCompletedAnswers] = useState<CompletedAnswers>({});
   const [editingStep, setEditingStep] = useState<number | null>(null);
@@ -125,6 +127,9 @@ export default function LemonadeApp() {
     setOtherPreferenceText('');
     setIsAddressConfirmed(false);
     setShowMap(false);
+    setSelectedAddressSuggestion(null);
+    setAddressLocation(null);
+    setStaticMapUrl(null);
     setCurrentOrderId(null);
     setIsOrderSubmitting(false);
     setIsSearchingRestaurant(false);
@@ -196,6 +201,9 @@ export default function LemonadeApp() {
         setOtherPreferenceText(savedConversation.otherPreferenceText || '');
         setIsAddressConfirmed(savedConversation.isAddressConfirmed || false);
         setShowMap(savedConversation.showMap || false);
+        setSelectedAddressSuggestion(savedConversation.selectedAddressSuggestion || null);
+        setAddressLocation(savedConversation.addressLocation || null);
+        setStaticMapUrl(savedConversation.staticMapUrl || null);
         
         // 恢复地图动画状态
         if (savedConversation.showMap) {
@@ -310,7 +318,10 @@ export default function LemonadeApp() {
         otherAllergyText,
         otherPreferenceText,
         isAddressConfirmed,
-        showMap
+        showMap,
+        selectedAddressSuggestion,
+        addressLocation,
+        staticMapUrl
       };
       CookieManager.saveConversationState(conversationState);
     }
@@ -321,7 +332,7 @@ export default function LemonadeApp() {
     if (isAuthenticated) {
       saveConversationState();
     }
-  }, [currentStep, completedAnswers, address, budget, selectedAllergies, selectedPreferences, selectedFoodType, otherAllergyText, otherPreferenceText, isAddressConfirmed, showMap]);
+  }, [currentStep, completedAnswers, address, budget, selectedAllergies, selectedPreferences, selectedFoodType, otherAllergyText, otherPreferenceText, isAddressConfirmed, showMap, selectedAddressSuggestion, addressLocation, staticMapUrl]);
   
   // 鉴权问题文本变化回调
   const handleAuthQuestionChange = (question: string) => {
@@ -467,6 +478,13 @@ export default function LemonadeApp() {
   const handleSelectAddress = (suggestion: AddressSuggestion) => {
     setSelectedAddressSuggestion(suggestion);
     setAddress(suggestion.description);
+    
+    // 保存经纬度信息
+    if (suggestion.location) {
+      setAddressLocation(suggestion.location);
+      console.log('地址经纬度:', suggestion.location);
+    }
+    
     console.log('地址已选择:', suggestion.description); // 调试日志
   };
 
@@ -478,6 +496,13 @@ export default function LemonadeApp() {
     
     setIsAddressConfirmed(true);
     changeEmotion('✅');
+    
+    // 如果有经纬度信息，生成静态地图URL
+    if (addressLocation) {
+      const mapUrl = getTencentStaticMapUrl(addressLocation.lat, addressLocation.lng);
+      setStaticMapUrl(mapUrl);
+      console.log('生成静态地图URL:', mapUrl);
+    }
     
     Animated.timing(mapAnimation, {
       toValue: 1,
@@ -637,6 +662,9 @@ export default function LemonadeApp() {
     setIsAddressConfirmed(false);
     setShowMap(false);
     setAddress('');
+    setSelectedAddressSuggestion(null);
+    setAddressLocation(null);
+    setStaticMapUrl(null);
     mapAnimation.setValue(0);
   };
 
@@ -885,7 +913,12 @@ export default function LemonadeApp() {
               ]}
             >
               <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginTop: 16 }}>
-                <MapComponent showMap={showMap} mapAnimation={mapAnimation} />
+                <MapComponent 
+                  showMap={showMap} 
+                  mapAnimation={mapAnimation} 
+                  staticMapUrl={staticMapUrl}
+                  address={address}
+                />
               </View>
             </Animated.View>
           )}
@@ -1149,7 +1182,12 @@ export default function LemonadeApp() {
                       ]}
                     >
                       <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
-                        <MapComponent showMap={showMap} mapAnimation={mapAnimation} />
+                        <MapComponent 
+                          showMap={showMap} 
+                          mapAnimation={mapAnimation} 
+                          staticMapUrl={staticMapUrl}
+                          address={address}
+                        />
                       </View>
                     </Animated.View>
                   )}

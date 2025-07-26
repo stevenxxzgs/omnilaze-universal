@@ -21,7 +21,7 @@ export const WebPortal: React.FC<WebPortalProps> = ({ children, isVisible }) => 
         portal.style.top = '0';
         portal.style.left = '0';
         portal.style.zIndex = '99999';
-        portal.style.pointerEvents = 'none';
+        portal.style.pointerEvents = 'auto';
         document.body.appendChild(portal);
       }
       setPortalRoot(portal);
