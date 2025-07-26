@@ -33,10 +33,10 @@ export const globalStyles = StyleSheet.create({
 export const progressStyles = StyleSheet.create({
   progressContainer: {
     position: 'absolute',
-    top: width > 768 ? 120 : 80,
-    left: width > 768 ? 100 : 6,
+    top: width > 768 ? 130 : 80,
+    left: width > 768 ? 100 : 20, // 改为right定位
     zIndex: 10,
-    width: width > 768 ? 180 : '90%',
+    width: width > 768 ? 120 : 100, // 减小宽度，让文字更紧凑
     marginBottom: 0,
   },
   progressSteps: {
@@ -181,17 +181,11 @@ export const rightContentStyles = StyleSheet.create({
   rightContent: {
     width: '100%',
     minHeight: height * 1.2,
-    maxWidth: width > 768 ? 700 : '100%',
-    alignSelf: 'center',
+    maxWidth: width > 768 ? 700 : '100%', // 恢复原来的最大宽度
+    alignSelf: 'center', // 恢复居中对齐
     paddingTop: width > 768 ? 90 : 60,
-    // 降低右侧内容的z-index，确保下拉框在其上方
-    ...Platform.select({
-      web: {
-        position: 'relative',
-        zIndex: 1,
-      },
-    }),
-  } as any,
+    // 移除右侧内边距，让内容保持居中
+  },
 });
 
 export const loadingStyles = StyleSheet.create({

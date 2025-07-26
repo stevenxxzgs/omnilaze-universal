@@ -93,17 +93,28 @@ export default function LemonadeApp() {
   // 用户菜单相关状态
   const [showInviteModal, setShowInviteModal] = useState(false);
 
+  // 重置触发器，用于重置AuthComponent状态
+  const [authResetTrigger, setAuthResetTrigger] = useState(0);
+
   // 登出处理函数
   const handleLogout = () => {
-    // 清除所有Cookie
+    console.log('开始登出流程...');
+    
+    // 清除所有Cookie和本地存储
     CookieManager.clearUserSession();
     CookieManager.clearConversationState();
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('phone_number');
     
-    // 重置所有状态
+    // 立即重置所有状态到初始状态
     setIsAuthenticated(false);
     setAuthResult(null);
     setCurrentStep(0);
-    setCompletedAnswers({});
+    setCompletedAnswers({}); // 清空所有已完成的答案
+    setEditingStep(null);
+    setOriginalAnswerBeforeEdit(null);
+    
+    // 重置所有表单数据
     setAddress('');
     setBudget('');
     setSelectedAllergies([]);
@@ -113,23 +124,25 @@ export default function LemonadeApp() {
     setOtherPreferenceText('');
     setIsAddressConfirmed(false);
     setShowMap(false);
-    setEditingStep(null);
-    setOriginalAnswerBeforeEdit(null);
     setCurrentOrderId(null);
     setIsOrderSubmitting(false);
     setIsSearchingRestaurant(false);
     setInputError('');
     
-    // 重置动画
+    // 重置UI相关状态
+    setShowInviteModal(false);
+    setDisplayedText('');
+    setAuthQuestionText('请输入手机号获取验证码');
+    
+    // 重置所有动画到初始状态  
     mapAnimation.setValue(0);
-    inputSectionAnimation.setValue(0);
-    currentQuestionAnimation.setValue(0);
+    inputSectionAnimation.setValue(0); // 设为0以便触发动画
+    currentQuestionAnimation.setValue(1); // 设为1以便立即显示问题
     
-    // 清除本地存储（兼容性）
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('phone_number');
+    console.log('用户已登出，所有状态和持久化内容已清除');
     
-    console.log('用户已登出，所有状态已重置');
+    // 立即触发AuthComponent重置和界面更新
+    setAuthResetTrigger(prev => prev + 1);
   };
 
   // 邀请处理函数
@@ -193,16 +206,40 @@ export default function LemonadeApp() {
   }, []);
 
   useEffect(() => {
-    // 只在非编辑模式下且已认证后触发打字机效果
+    // 未认证状态下的打字机效果
+    if (editingStep === null && !isAuthenticated) {
+      inputSectionAnimation.setValue(0);
+      currentQuestionAnimation.setValue(1);
+      
+      // 如果displayedText为空或者是初始问题，触发打字机效果
+      if (!displayedText || displayedText === '请输入手机号获取验证码') {
+        typeText(authQuestionText, TIMING.TYPING_SPEED);
+      }
+    }
+    
+    // 已认证状态下的打字机效果 - 添加防重复逻辑
     if (editingStep === null && isAuthenticated && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
+      const stepData = getCurrentStepData();
+      // 支付步骤只在第一次进入时触发打字机效果
+      if (stepData.showPayment && displayedText === stepData.message) {
+        return; // 如果已经显示了支付步骤的文本，就不重复触发
+      }
+      
       inputSectionAnimation.setValue(0);
       currentQuestionAnimation.setValue(1);
       
       // 直接调用typeText，让它处理所有逻辑
-      const newMessage = getCurrentStepData().message;
+      const newMessage = stepData.message;
       typeText(newMessage, TIMING.TYPING_SPEED);
     }
-  }, [currentStep, editingStep, isAuthenticated, selectedFoodType]); // 添加selectedFoodType依赖
+  }, [currentStep, editingStep, isAuthenticated, selectedFoodType]); // 移除authQuestionText依赖避免支付页面重复触发
+
+  // 单独处理未认证状态下的authQuestionText变化
+  useEffect(() => {
+    if (!isAuthenticated && editingStep === null && authQuestionText) {
+      typeText(authQuestionText, TIMING.TYPING_SPEED);
+    }
+  }, [authQuestionText, isAuthenticated]);
 
   // Handle editing mode - skip typewriter effect and set up immediately
   useEffect(() => {
@@ -287,11 +324,7 @@ export default function LemonadeApp() {
   // 鉴权问题文本变化回调
   const handleAuthQuestionChange = (question: string) => {
     setAuthQuestionText(question);
-    // 只有在未认证状态下才触发打字机效果，避免与主useEffect冲突
-    if (!isAuthenticated) {
-      // 直接调用typeText，让它处理清空和重新打字
-      typeText(question, TIMING.TYPING_SPEED);
-    }
+    // 移除这里的typeText调用，因为现在由独立的useEffect处理
   };
   
   // 鉴权错误回调
@@ -320,7 +353,7 @@ export default function LemonadeApp() {
         ...stepData,
         message: isSelectedDrink 
           ? "我可以花多少钱帮你买奶茶？" 
-          : "我可以花多少钱帮你点餐？"
+          : "我可以花多少钱帮你点外卖？"
       };
     }
     
@@ -921,6 +954,7 @@ export default function LemonadeApp() {
           budget={budget}
           animationValue={inputSectionAnimation}
           onConfirmOrder={handleConfirmOrder}
+          isTyping={isTyping}
         />
       );
     }
@@ -967,6 +1001,12 @@ export default function LemonadeApp() {
     }
     
     if (canProceed()) {
+      // 支付步骤不显示额外的按钮，因为PaymentComponent内部已经有按钮
+      const stepData = getCurrentStepData();
+      if (stepData.showPayment) {
+        return null;
+      }
+      
       return (
         <ActionButton
           onPress={handleNext}
@@ -1005,7 +1045,10 @@ export default function LemonadeApp() {
         />
       )}
       
-      <ProgressSteps currentStep={currentStep} />
+      {/* 进度条 - 仅在登录后显示 */}
+      {isAuthenticated && (
+        <ProgressSteps currentStep={currentStep} />
+      )}
 
       <ScrollView 
         ref={scrollViewRef}
@@ -1061,27 +1104,16 @@ export default function LemonadeApp() {
                   emotionAnimation={emotionAnimation}
                   shakeAnimation={shakeAnimation}
                 >
-                  {DEV_CONFIG.SKIP_AUTH ? (
-                    <DevAuthComponent
-                      onAuthSuccess={handleAuthSuccess}
-                      onError={handleAuthError}
-                      onQuestionChange={handleAuthQuestionChange}
-                      animationValue={inputSectionAnimation}
-                      validatePhoneNumber={validatePhoneNumber}
-                      triggerShake={triggerShake}
-                      changeEmotion={changeEmotion}
-                    />
-                  ) : (
-                    <AuthComponent
-                      onAuthSuccess={handleAuthSuccess}
-                      onError={handleAuthError}
-                      onQuestionChange={handleAuthQuestionChange}
-                      animationValue={inputSectionAnimation}
-                      validatePhoneNumber={validatePhoneNumber}
-                      triggerShake={triggerShake}
-                      changeEmotion={changeEmotion}
-                    />
-                  )}
+                  <AuthComponent
+                    onAuthSuccess={handleAuthSuccess}
+                    onError={handleAuthError}
+                    onQuestionChange={handleAuthQuestionChange}
+                    animationValue={inputSectionAnimation}
+                    validatePhoneNumber={validatePhoneNumber}
+                    triggerShake={triggerShake}
+                    changeEmotion={changeEmotion}
+                    resetTrigger={authResetTrigger}
+                  />
                 </CurrentQuestion>
               )}
 

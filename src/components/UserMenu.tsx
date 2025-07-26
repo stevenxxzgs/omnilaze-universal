@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Platform, Dimensions } from 'react-native';
 import { SimpleIcon } from './SimpleIcon';
 import { COLORS } from '../constants';
+
+const { width } = Dimensions.get('window');
 
 interface UserMenuProps {
   isVisible: boolean;
@@ -90,8 +92,8 @@ export const UserMenu: React.FC<UserMenuProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 20,
-    right: 20,
+    top: width > 768 ? 120 : 55, // 调整到ProgressSteps上方一点点
+    right: width > 768 ? 185 : 100, // 调整到ProgressSteps左侧
     zIndex: 1000,
   },
   menuButton: {

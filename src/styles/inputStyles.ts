@@ -115,8 +115,10 @@ export const budgetStyles = StyleSheet.create({
 export const buttonStyles = StyleSheet.create({
   simpleButton: {
     borderRadius: LAYOUT.BORDER_RADIUS,
-    paddingHorizontal: 24,
+    paddingHorizontal: 32, // 从24增加到32，给更多横向空间
     paddingVertical: 14,
+    minWidth: 120, // 添加最小宽度确保文字不被压缩
+    alignItems: 'center', // 确保文字居中
     alignSelf: 'flex-start',
     marginTop: 12,
     shadowColor: COLORS.SHADOW,
@@ -163,8 +165,10 @@ export const buttonStyles = StyleSheet.create({
   nextSimpleButton: {
     backgroundColor: COLORS.PRIMARY,
     borderRadius: 8,
-    paddingHorizontal: 20,
+    paddingHorizontal: 28, // 从20增加到28
     paddingVertical: 12,
+    minWidth: 120, // 添加最小宽度
+    alignItems: 'center', // 确保文字居中
     alignSelf: 'flex-start',
     marginTop: 8,
   },
