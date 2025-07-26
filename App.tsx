@@ -28,6 +28,7 @@ import { AddressAutocomplete, AddressSuggestion } from './src/components/Address
 
 // Services - 移除鉴权相关API导入，因为AuthComponent已经包含
 // import { sendVerificationCode, verifyCodeAndLogin } from './src/services/api';
+import { createOrder, submitOrder } from './src/services/api';
 
 // Hooks
 import { 
@@ -74,6 +75,10 @@ export default function LemonadeApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authResult, setAuthResult] = useState<AuthResult | null>(null);
   const [authQuestionText, setAuthQuestionText] = useState('请输入手机号获取验证码'); // 鉴权阶段的问题文本
+  
+  // 订单相关状态
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [isOrderSubmitting, setIsOrderSubmitting] = useState(false);
 
   // Custom hooks
   const { displayedText, isTyping, showCursor, typeText, setDisplayedText } = useTypewriterEffect();
@@ -163,6 +168,21 @@ export default function LemonadeApp() {
     }
     
     console.log('鉴权成功:', result);
+    
+    // 鉴权成功后，添加手机号作为第一个完成的答案
+    const phoneAnswer = { type: 'phone', value: result.phoneNumber };
+    setCompletedAnswers({ [-1]: phoneAnswer }); // 使用-1作为手机号步骤的索引
+    
+    // 开始订单收集流程
+    setTimeout(() => {
+      setCurrentStep(0); // 设置为第一个订单收集步骤（地址）
+      // 触发第一个订单问题的打字机效果
+      const firstStepData = STEP_CONTENT[0];
+      setDisplayedText('');
+      setTimeout(() => {
+        typeText(firstStepData.message, 80);
+      }, 100);
+    }, 500);
   };
   
   // 鉴权问题文本变化回调
@@ -329,16 +349,83 @@ export default function LemonadeApp() {
         if (currentStep < STEP_CONTENT.length - 1) {
           setCurrentStep(currentStep + 1);
         } else {
-          setCurrentStep(5);
-          changeEmotion('🎉');
-          
-          setTimeout(() => {
-            changeEmotion('🍕');
-            typeText('🎊 完美！已为您找到3家符合要求的餐厅，正在跳转...', 40);
-          }, TIMING.COMPLETION_DELAY);
+          // 最后一步完成，创建订单
+          handleCreateOrder();
         }
       }, TIMING.SCROLL_DELAY);
     });
+  };
+
+  // 创建订单
+  const handleCreateOrder = async () => {
+    if (!authResult?.userId || !authResult?.phoneNumber) {
+      setInputError('用户信息缺失，请重新登录');
+      return;
+    }
+
+    const orderData = {
+      address: address,
+      allergies: selectedAllergies,
+      preferences: selectedPreferences,
+      budget: budget
+    };
+
+    try {
+      setIsOrderSubmitting(true);
+      changeEmotion('📝');
+      
+      const result = await createOrder(authResult.userId, authResult.phoneNumber, orderData);
+      
+      if (result.success) {
+        setCurrentOrderId(result.order_id || null);
+        console.log('订单创建成功:', result.order_number);
+        
+        // 立即提交订单
+        handleSubmitOrder(result.order_id!);
+      } else {
+        setInputError(result.message);
+        triggerShake();
+        changeEmotion('😰');
+      }
+    } catch (error) {
+      setInputError('创建订单失败，请重试');
+      triggerShake();
+      changeEmotion('😰');
+      console.error('创建订单错误:', error);
+    } finally {
+      setIsOrderSubmitting(false);
+    }
+  };
+
+  // 提交订单
+  const handleSubmitOrder = async (orderId: string) => {
+    try {
+      changeEmotion('🚀');
+      
+      const result = await submitOrder(orderId);
+      
+      if (result.success) {
+        console.log('订单提交成功:', result.order_number);
+        
+        // 显示完成界面
+        setCurrentStep(5);
+        changeEmotion('🎉');
+        
+        setTimeout(() => {
+          changeEmotion('🍕');
+          typeText('🎊 完美！订单已提交，正在为您匹配餐厅...', 40);
+        }, TIMING.COMPLETION_DELAY);
+      } else {
+        setInputError(result.message);
+        triggerShake();
+        changeEmotion('😰');
+      }
+    } catch (error) {
+      setInputError('提交订单失败，请重试');
+      triggerShake();
+      changeEmotion('😰');
+      console.error('提交订单错误:', error);
+    }
   };
 
   const handleEditAddress = () => {
@@ -643,15 +730,20 @@ export default function LemonadeApp() {
                   const answer = completedAnswers[index];
                   const isCurrentlyEditing = editingStep === index;
                   
+                  // 为手机号问题（index: -1）提供特殊处理
+                  const questionText = index === -1 ? 
+                    '你的手机号码是多少？' : 
+                    STEP_CONTENT[index]?.message || '';
+                  
                   return (
                     <CompletedQuestion
                       key={index}
-                      question={STEP_CONTENT[index].message}
+                      question={questionText}
                       answer={answer}
                       index={index}
-                      questionAnimation={questionAnimations[index]}
-                      answerAnimation={answerAnimations[index]}
-                      onEdit={() => handleEditAnswer(index)}
+                      questionAnimation={questionAnimations[Math.max(0, index)] || new Animated.Value(1)}
+                      answerAnimation={answerAnimations[Math.max(0, index)] || new Animated.Value(1)}
+                      onEdit={() => index >= 0 ? handleEditAnswer(index) : null} // 手机号不可编辑
                       formatAnswerDisplay={formatAnswerDisplay}
                       isEditing={isCurrentlyEditing}
                       editingInput={isCurrentlyEditing ? renderCurrentInput() : undefined}

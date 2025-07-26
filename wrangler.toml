@@ -1,0 +1,30 @@
+name = "omnilaze-universal-api"
+main = "worker.js"
+compatibility_date = "2024-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# Environment variables
+[env.production]
+[env.production.vars]
+ENVIRONMENT = "production"
+
+[env.development]
+[env.development.vars]
+ENVIRONMENT = "development"
+
+# Cloudflare D1 Database for orders and users
+[[d1_databases]]
+binding = "DB"
+database_name = "omnilaze-orders"
+database_id = "37fb6011-73ef-49f9-a189-312c69a098db"
+
+# KV storage for verification codes (临时存储)
+[[kv_namespaces]]
+binding = "VERIFICATION_KV"
+id = "9c43c4f6c5d348afb5ff54b7784d9ba1"
+
+# CORS origins
+[vars]
+ENVIRONMENT = "production"
+ALLOWED_ORIGINS = '["https://a979c9a2.omnilaze-universal-frontend.pages.dev", "https://omnilaze-universal-frontend.pages.dev", "http://localhost:8081", "http://localhost:3000"]'
+SPUG_URL = "https://push.spug.cc/send/61k3njZJqLjM4Dv9"

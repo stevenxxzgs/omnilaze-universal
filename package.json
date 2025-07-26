@@ -1,5 +1,5 @@
 {
-  "name": "lemonade-app",
+  "name": "omnilaze-universal",
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
@@ -19,7 +19,11 @@
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
     "react-native-maps": "^1.24.10",
-    "react-native-web": "^0.20.0"
+    "react-dom": "19.0.0",
+    "react-native-web": "^0.20.0",
+    "@expo/metro-runtime": "~5.0.4",
+    "expo-font": "~13.3.2",
+    "expo-splash-screen": "~0.30.10"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
