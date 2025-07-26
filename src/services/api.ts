@@ -11,9 +11,17 @@ export interface VerificationResponse {
   message: string;
   user_id?: string;
   phone_number?: string;
+  is_new_user?: boolean;
 }
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+export interface InviteCodeResponse {
+  success: boolean;
+  message: string;
+  user_id?: string;
+  phone_number?: string;
+}
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 /**
  * 发送手机验证码
@@ -71,6 +79,38 @@ export async function verifyCodeAndLogin(phoneNumber: string, code: string): Pro
     return data;
   } catch (error) {
     console.error('验证码验证错误:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : '网络错误，请重试'
+    };
+  }
+}
+
+/**
+ * 验证邀请码并创建新用户
+ */
+export async function verifyInviteCodeAndCreateUser(phoneNumber: string, inviteCode: string): Promise<InviteCodeResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/verify-invite-code`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        phone_number: phoneNumber,
+        invite_code: inviteCode
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || '邀请码验证失败');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('邀请码验证错误:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : '网络错误，请重试'

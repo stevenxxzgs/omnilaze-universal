@@ -40,7 +40,7 @@ fi
 
 # 启动Flask应用
 echo "正在启动API服务..."
-echo "服务将运行在: http://localhost:5000"
+echo "服务将运行在: http://localhost:5001"
 echo "按 Ctrl+C 停止服务"
 echo ""
 
