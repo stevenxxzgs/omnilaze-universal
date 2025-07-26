@@ -20,6 +20,7 @@ export interface AuthComponentProps {
   validatePhoneNumber: (phone: string) => boolean;
   triggerShake: () => void;
   changeEmotion: (emoji: string) => void;
+  resetTrigger?: number; // 新增：重置触发器，当这个值改变时重置组件状态
 }
 
 export const AuthComponent: React.FC<AuthComponentProps> = ({
@@ -30,6 +31,7 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
   validatePhoneNumber,
   triggerShake,
   changeEmotion,
+  resetTrigger,
 }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
@@ -46,6 +48,23 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
   useEffect(() => {
     onQuestionChange('请输入手机号获取验证码');
   }, []);
+
+  // 重置功能：当resetTrigger改变时重置所有状态
+  useEffect(() => {
+    if (resetTrigger !== undefined) {
+      setPhoneNumber('');
+      setVerificationCode('');
+      setInviteCode('');
+      setIsVerificationCodeSent(false);
+      setIsPhoneVerified(false);
+      setIsNewUser(false);
+      setCountdown(0);
+      setInputError('');
+      setIsLoading(false);
+      setShowVerificationUI(false);
+      onQuestionChange('请输入手机号获取验证码');
+    }
+  }, [resetTrigger]);
 
   // 倒计时 useEffect
   useEffect(() => {

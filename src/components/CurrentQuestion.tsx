@@ -71,25 +71,7 @@ export const CurrentQuestion: React.FC<CurrentQuestionProps> = ({
               {isTyping && showCursor && <Text style={questionStyles.cursor}>|</Text>}
             </Text>
             
-            {currentStep === 5 && (
-              <View style={loadingStyles.loadingContainer}>
-                <Animated.View
-                  style={[
-                    loadingStyles.loadingSpinner,
-                    {
-                      transform: [{
-                        rotate: currentQuestionAnimation.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0deg', '360deg'],
-                        }),
-                      }],
-                    },
-                  ]}
-                >
-                  <Text style={loadingStyles.loadingEmoji}>⟳</Text>
-                </Animated.View>
-              </View>
-            )}
+            {/* 移除了刷新图标 - 原来在这里显示旋转的"⟳"符号 */}
           </Animated.View>
         </View>
 

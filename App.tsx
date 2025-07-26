@@ -46,6 +46,7 @@ import {
 // Data & Types
 import { STEP_CONTENT } from './src/data/stepContent';
 import { ALLERGY_OPTIONS, PREFERENCE_OPTIONS, FOOD_TYPE_OPTIONS } from './src/data/checkboxOptions';
+import { BUDGET_OPTIONS_FOOD, BUDGET_OPTIONS_DRINK } from './src/constants';
 import type { CompletedAnswers, InputFocus, Answer } from './src/types';
 
 // Styles
@@ -92,17 +93,28 @@ export default function LemonadeApp() {
   // 用户菜单相关状态
   const [showInviteModal, setShowInviteModal] = useState(false);
 
+  // 重置触发器，用于重置AuthComponent状态
+  const [authResetTrigger, setAuthResetTrigger] = useState(0);
+
   // 登出处理函数
   const handleLogout = () => {
-    // 清除所有Cookie
+    console.log('开始登出流程...');
+    
+    // 清除所有Cookie和本地存储
     CookieManager.clearUserSession();
     CookieManager.clearConversationState();
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('phone_number');
     
-    // 重置所有状态
+    // 立即重置所有状态到初始状态
     setIsAuthenticated(false);
     setAuthResult(null);
     setCurrentStep(0);
-    setCompletedAnswers({});
+    setCompletedAnswers({}); // 清空所有已完成的答案
+    setEditingStep(null);
+    setOriginalAnswerBeforeEdit(null);
+    
+    // 重置所有表单数据
     setAddress('');
     setBudget('');
     setSelectedAllergies([]);
@@ -112,23 +124,25 @@ export default function LemonadeApp() {
     setOtherPreferenceText('');
     setIsAddressConfirmed(false);
     setShowMap(false);
-    setEditingStep(null);
-    setOriginalAnswerBeforeEdit(null);
     setCurrentOrderId(null);
     setIsOrderSubmitting(false);
     setIsSearchingRestaurant(false);
     setInputError('');
     
-    // 重置动画
+    // 重置UI相关状态
+    setShowInviteModal(false);
+    setDisplayedText('');
+    setAuthQuestionText('请输入手机号获取验证码');
+    
+    // 重置所有动画到初始状态  
     mapAnimation.setValue(0);
-    inputSectionAnimation.setValue(0);
-    currentQuestionAnimation.setValue(0);
+    inputSectionAnimation.setValue(0); // 设为0以便触发动画
+    currentQuestionAnimation.setValue(1); // 设为1以便立即显示问题
     
-    // 清除本地存储（兼容性）
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('phone_number');
+    console.log('用户已登出，所有状态和持久化内容已清除');
     
-    console.log('用户已登出，所有状态已重置');
+    // 立即触发AuthComponent重置和界面更新
+    setAuthResetTrigger(prev => prev + 1);
   };
 
   // 邀请处理函数
@@ -192,39 +206,40 @@ export default function LemonadeApp() {
   }, []);
 
   useEffect(() => {
-    // 开发模式自动认证
-    if (DEV_CONFIG.SKIP_AUTH && !isAuthenticated) {
-      const mockAuthResult: AuthResult = {
-        success: true,
-        isNewUser: DEV_CONFIG.MOCK_USER.is_new_user,
-        userId: DEV_CONFIG.MOCK_USER.user_id,
-        phoneNumber: DEV_CONFIG.MOCK_USER.phone_number,
-        message: '开发模式自动登录'
-      };
-      
-      // 延迟一点时间让UI渲染
-      setTimeout(() => {
-        handleAuthSuccess(mockAuthResult);
-      }, 100);
-      
-      return;
-    }
-    
-    // 只在非编辑模式下触发打字机效果
-    if (editingStep === null && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
+    // 未认证状态下的打字机效果
+    if (editingStep === null && !isAuthenticated) {
       inputSectionAnimation.setValue(0);
       currentQuestionAnimation.setValue(1);
       
-      // 立即设置新问题的第一个字符，避免显示旧问题文本造成的闪烁
-      const newMessage = getCurrentStepData().message;
-      setDisplayedText(newMessage.substring(0, 1));
-      
-      // 然后开始打字机效果（从第二个字符开始）
-      setTimeout(() => {
-        typeText(newMessage, 80);
-      }, 10); // 很短的延迟确保第一个字符已经设置
+      // 如果displayedText为空或者是初始问题，触发打字机效果
+      if (!displayedText || displayedText === '请输入手机号获取验证码') {
+        typeText(authQuestionText, TIMING.TYPING_SPEED);
+      }
     }
-  }, [currentStep, completedAnswers, editingStep, isAuthenticated]);
+    
+    // 已认证状态下的打字机效果 - 添加防重复逻辑
+    if (editingStep === null && isAuthenticated && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
+      const stepData = getCurrentStepData();
+      // 支付步骤只在第一次进入时触发打字机效果
+      if (stepData.showPayment && displayedText === stepData.message) {
+        return; // 如果已经显示了支付步骤的文本，就不重复触发
+      }
+      
+      inputSectionAnimation.setValue(0);
+      currentQuestionAnimation.setValue(1);
+      
+      // 直接调用typeText，让它处理所有逻辑
+      const newMessage = stepData.message;
+      typeText(newMessage, TIMING.TYPING_SPEED);
+    }
+  }, [currentStep, editingStep, isAuthenticated, selectedFoodType]); // 移除authQuestionText依赖避免支付页面重复触发
+
+  // 单独处理未认证状态下的authQuestionText变化
+  useEffect(() => {
+    if (!isAuthenticated && editingStep === null && authQuestionText) {
+      typeText(authQuestionText, TIMING.TYPING_SPEED);
+    }
+  }, [authQuestionText, isAuthenticated]);
 
   // Handle editing mode - skip typewriter effect and set up immediately
   useEffect(() => {
@@ -309,8 +324,7 @@ export default function LemonadeApp() {
   // 鉴权问题文本变化回调
   const handleAuthQuestionChange = (question: string) => {
     setAuthQuestionText(question);
-    // 触发打字机效果重新显示新问题
-    typeText(question, 80);
+    // 移除这里的typeText调用，因为现在由独立的useEffect处理
   };
   
   // 鉴权错误回调
@@ -328,8 +342,22 @@ export default function LemonadeApp() {
         inputType: 'phone'
       };
     }
+    
     // 鉴权后开始正常流程
-    return STEP_CONTENT[currentStep];
+    const stepData = STEP_CONTENT[currentStep];
+    
+    // 特殊处理预算步骤，根据食物类型显示不同问题
+    if (stepData && stepData.inputType === 'budget') {
+      const isSelectedDrink = selectedFoodType.includes('drink');
+      return {
+        ...stepData,
+        message: isSelectedDrink 
+          ? "我可以花多少钱帮你买奶茶？" 
+          : "我可以花多少钱帮你点外卖？"
+      };
+    }
+    
+    return stepData;
   };
 
   const getCurrentAnswer = (): Answer | null => {
@@ -564,7 +592,7 @@ export default function LemonadeApp() {
         
         setTimeout(() => {
           changeEmotion('🍕');
-          typeText('🎊 完美！订单已提交，正在为您匹配餐厅...', 40);
+          typeText('🎊 完美！订单已提交，正在为您匹配餐厅...', TIMING.TYPING_SPEED_FAST);
         }, TIMING.COMPLETION_DELAY);
       } else {
         setInputError(result.message);
@@ -592,14 +620,14 @@ export default function LemonadeApp() {
     
     // 显示搜索餐厅的文本
     setTimeout(() => {
-      typeText('正在为你寻找合适外卖...', 40);
+      typeText('正在为你寻找合适外卖...', TIMING.TYPING_SPEED_FAST);
     }, 500);
     
     // 模拟搜索过程，5秒后显示完成
     setTimeout(() => {
       setIsSearchingRestaurant(false);
       changeEmotion('🎉');
-      typeText('🎊 完美！已为您找到最合适的餐厅，订单已提交！', 40);
+      typeText('🎊 完美！已为您找到最合适的餐厅，订单已提交！', TIMING.TYPING_SPEED_FAST);
     }, 5000);
   };
 
@@ -706,11 +734,15 @@ export default function LemonadeApp() {
       if (editingStep === 1) {
         const isSelectedDrink = selectedFoodType.includes('drink');
         
+        // 清空预算，因为食物类型变化后预算范围可能不同
+        setBudget('');
+        
         if (isSelectedDrink) {
           // 如果改选为喝奶茶，需要清除之后的忌口和偏好答案，并跳转到当前最高有效步骤
           const newCompletedAnswers = { ...completedAnswers };
           delete newCompletedAnswers[2]; // 删除忌口答案
           delete newCompletedAnswers[3]; // 删除偏好答案
+          delete newCompletedAnswers[4]; // 删除预算答案
           setCompletedAnswers({
             ...newCompletedAnswers,
             [editingStep]: currentAnswer
@@ -728,7 +760,15 @@ export default function LemonadeApp() {
             setCurrentStep(4);
           }
         } else {
-          // 如果改选为吃饭，保持正常流程
+          // 如果改选为吃饭，也要清除预算答案重新填写
+          const newCompletedAnswers = { ...completedAnswers };
+          delete newCompletedAnswers[4]; // 删除预算答案
+          setCompletedAnswers({
+            ...newCompletedAnswers,
+            [editingStep]: currentAnswer
+          });
+          
+          // 保持正常流程
           if (currentStep > 1 && currentStep < 4) {
             // 如果当前在忌口到偏好之间，保持当前步骤
           } else if (currentStep >= 4) {
@@ -741,6 +781,8 @@ export default function LemonadeApp() {
       // 退出编辑模式
       setEditingStep(null);
       setOriginalAnswerBeforeEdit(null);
+      
+      // 主useEffect会自动处理步骤切换后的打字机效果，不需要手动调用
     }
   };
 
@@ -865,6 +907,10 @@ export default function LemonadeApp() {
     }
     
     if (stepData.showBudgetInput) {
+      // 根据食物类型选择预算选项
+      const isSelectedDrink = selectedFoodType.includes('drink');
+      const budgetOptions = isSelectedDrink ? BUDGET_OPTIONS_DRINK : BUDGET_OPTIONS_FOOD;
+      
       return (
         <BudgetInput
           value={budget}
@@ -872,6 +918,7 @@ export default function LemonadeApp() {
           animationValue={inputSectionAnimation}
           onSubmitEditing={editingStep === 4 ? handleFinishEditing : undefined}
           errorMessage={inputError}
+          budgetOptions={budgetOptions}
         />
       );
     }
@@ -907,6 +954,7 @@ export default function LemonadeApp() {
           budget={budget}
           animationValue={inputSectionAnimation}
           onConfirmOrder={handleConfirmOrder}
+          isTyping={isTyping}
         />
       );
     }
@@ -953,6 +1001,12 @@ export default function LemonadeApp() {
     }
     
     if (canProceed()) {
+      // 支付步骤不显示额外的按钮，因为PaymentComponent内部已经有按钮
+      const stepData = getCurrentStepData();
+      if (stepData.showPayment) {
+        return null;
+      }
+      
       return (
         <ActionButton
           onPress={handleNext}
@@ -991,7 +1045,10 @@ export default function LemonadeApp() {
         />
       )}
       
-      <ProgressSteps currentStep={currentStep} />
+      {/* 进度条 - 仅在登录后显示 */}
+      {isAuthenticated && (
+        <ProgressSteps currentStep={currentStep} />
+      )}
 
       <ScrollView 
         ref={scrollViewRef}
@@ -1047,72 +1104,76 @@ export default function LemonadeApp() {
                   emotionAnimation={emotionAnimation}
                   shakeAnimation={shakeAnimation}
                 >
-                  {DEV_CONFIG.SKIP_AUTH ? (
-                    <DevAuthComponent
-                      onAuthSuccess={handleAuthSuccess}
-                      onError={handleAuthError}
-                      onQuestionChange={handleAuthQuestionChange}
-                      animationValue={inputSectionAnimation}
-                      validatePhoneNumber={validatePhoneNumber}
-                      triggerShake={triggerShake}
-                      changeEmotion={changeEmotion}
-                    />
-                  ) : (
-                    <AuthComponent
-                      onAuthSuccess={handleAuthSuccess}
-                      onError={handleAuthError}
-                      onQuestionChange={handleAuthQuestionChange}
-                      animationValue={inputSectionAnimation}
-                      validatePhoneNumber={validatePhoneNumber}
-                      triggerShake={triggerShake}
-                      changeEmotion={changeEmotion}
-                    />
-                  )}
+                  <AuthComponent
+                    onAuthSuccess={handleAuthSuccess}
+                    onError={handleAuthError}
+                    onQuestionChange={handleAuthQuestionChange}
+                    animationValue={inputSectionAnimation}
+                    validatePhoneNumber={validatePhoneNumber}
+                    triggerShake={triggerShake}
+                    changeEmotion={changeEmotion}
+                    resetTrigger={authResetTrigger}
+                  />
                 </CurrentQuestion>
               )}
 
               {/* Current Question - 正常流程、搜索状态显示 */}
               {isAuthenticated && editingStep === null && (
-                (currentStep < STEP_CONTENT.length && !completedAnswers[currentStep] && !STEP_CONTENT[currentStep]?.showPayment) ||
-                isSearchingRestaurant
-              ) && (
-                <CurrentQuestion
-                  displayedText={displayedText}
-                  isTyping={isTyping}
-                  showCursor={showCursor}
-                  inputError={inputError}
-                  currentStep={editingStep !== null ? editingStep : currentStep}
-                  currentQuestionAnimation={currentQuestionAnimation}
-                  emotionAnimation={emotionAnimation}
-                  shakeAnimation={shakeAnimation}
-                >
-                  {/* Map Container - 地址确认时显示（现在是第0步） */}
-                  {showMap && (currentStep === 0 || editingStep === 0) && editingStep === null && (
-                    <Animated.View 
-                      style={[
-                        {
-                          opacity: mapAnimation,
-                          transform: [{
-                            translateY: mapAnimation.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [16, 0],
-                            }),
-                          }],
-                        },
-                      ]}
+                // 如果正在搜索餐厅，只显示搜索文本，不显示其他内容
+                isSearchingRestaurant ? (
+                  <CurrentQuestion
+                    displayedText={displayedText}
+                    isTyping={isTyping}
+                    showCursor={showCursor}
+                    inputError={inputError}
+                    currentStep={currentStep}
+                    currentQuestionAnimation={currentQuestionAnimation}
+                    emotionAnimation={emotionAnimation}
+                    shakeAnimation={shakeAnimation}
+                  >
+                    {/* 搜索状态时不显示任何输入组件或按钮 */}
+                  </CurrentQuestion>
+                ) : (
+                  (currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) && (
+                    <CurrentQuestion
+                      displayedText={displayedText}
+                      isTyping={isTyping}
+                      showCursor={showCursor}
+                      inputError={inputError}
+                      currentStep={editingStep !== null ? editingStep : currentStep}
+                      currentQuestionAnimation={currentQuestionAnimation}
+                      emotionAnimation={emotionAnimation}
+                      shakeAnimation={shakeAnimation}
                     >
-                      <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
-                        <MapComponent showMap={showMap} mapAnimation={mapAnimation} />
-                      </View>
-                    </Animated.View>
-                  )}
+                      {/* Map Container - 地址确认时显示（现在是第0步） */}
+                      {showMap && (currentStep === 0 || editingStep === 0) && editingStep === null && (
+                        <Animated.View 
+                          style={[
+                            {
+                              opacity: mapAnimation,
+                              transform: [{
+                                translateY: mapAnimation.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [16, 0],
+                                }),
+                              }],
+                            },
+                          ]}
+                        >
+                          <View style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
+                            <MapComponent showMap={showMap} mapAnimation={mapAnimation} />
+                          </View>
+                        </Animated.View>
+                      )}
 
-                  {/* Input Section */}
-                  {renderCurrentInput()}
+                      {/* Input Section */}
+                      {renderCurrentInput()}
 
-                  {/* Action Button */}
-                  {renderActionButton()}
-                </CurrentQuestion>
+                      {/* Action Button */}
+                      {renderActionButton()}
+                    </CurrentQuestion>
+                  )
+                )
               )}
             </View>
           </View>

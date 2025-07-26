@@ -94,7 +94,7 @@ export const CompletedQuestion: React.FC<CompletedQuestionProps> = ({
                 <Text style={answerStyles.answerValue}>
                   {formatAnswerDisplay(answer)}
                 </Text>
-                {canEdit && (
+                {canEdit && isHovered && (
                   <TouchableOpacity 
                     onPress={onEdit}
                     style={answerStyles.editAnswerButton}

@@ -12,7 +12,8 @@ export const LAYOUT = {
 } as const;
 
 export const TIMING = {
-  TYPING_SPEED: 60,
+  TYPING_SPEED: 60,          // 主要问题的打字速度
+  TYPING_SPEED_FAST: 40,     // 快速文本的打字速度（成功消息等）
   CURSOR_BLINK: 500,
   ANIMATION_DELAY: 300,
   SCROLL_DELAY: 400,
@@ -43,6 +44,10 @@ export const THEME_COLORS = [
 ] as const;
 
 export const BUDGET_OPTIONS = ['30', '50', '100', '200'] as const;
+
+// 根据食物类型的不同预算选项
+export const BUDGET_OPTIONS_FOOD = ['50', '80', '120', '200'] as const;
+export const BUDGET_OPTIONS_DRINK = ['15', '25', '35', '50'] as const;
 
 export const STEP_TITLES = [
   "配送地址",
