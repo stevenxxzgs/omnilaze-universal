@@ -72,7 +72,11 @@ export const useValidation = () => {
         }
         return { isValid: true };
         
-      case 2: // 预算
+      case 2: // 忌口
+      case 3: // 偏好
+        return { isValid: true };
+        
+      case 4: // 预算
         const budgetNum = parseFloat(value);
         if (!value || budgetNum <= 0) {
           const errorMessage = '请设置一个合理的预算金额';
@@ -84,10 +88,6 @@ export const useValidation = () => {
           setInputError(errorMessage);
           return { isValid: false, errorMessage };
         }
-        return { isValid: true };
-        
-      case 3: // 忌口
-      case 4: // 偏好
         return { isValid: true };
         
       default:

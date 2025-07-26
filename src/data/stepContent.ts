@@ -12,11 +12,6 @@ export const STEP_CONTENT: StepContent[] = [
     inputType: "address"
   },
   {
-    message: "我可以花多少钱帮你点外卖？",
-    showBudgetInput: true,
-    inputType: "budget"
-  },
-  {
     message: "你有什么忌口？",
     showAllergyInput: true,
     inputType: "allergy"
@@ -25,6 +20,11 @@ export const STEP_CONTENT: StepContent[] = [
     message: "你有什么口味偏好？",
     showPreferenceInput: true,
     inputType: "preference"
+  },
+  {
+    message: "我可以花多少钱帮你点外卖？",
+    showBudgetInput: true,
+    inputType: "budget"
   },
   {
     message: "太棒了！正在为您推荐最合适的外卖...",

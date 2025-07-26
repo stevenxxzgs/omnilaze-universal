@@ -21,6 +21,7 @@ import { BaseInput } from './src/components/BaseInput';
 import { BudgetInput } from './src/components/BudgetInput';
 import { MapComponent } from './src/components/MapComponent';
 import { ActionButton } from './src/components/ActionButton';
+import { ImageCheckbox } from './src/components/ImageCheckbox';
 
 // Hooks
 import { 
@@ -32,6 +33,7 @@ import {
 
 // Data & Types
 import { STEP_CONTENT } from './src/data/stepContent';
+import { ALLERGY_OPTIONS, PREFERENCE_OPTIONS } from './src/data/checkboxOptions';
 import type { CompletedAnswers, InputFocus, Answer } from './src/types';
 
 // Styles
@@ -45,6 +47,9 @@ export default function LemonadeApp() {
   const [budget, setBudget] = useState('');
   const [allergies, setAllergies] = useState('');
   const [preferences, setPreferences] = useState('');
+  // 新增复选框状态
+  const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
+  const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
   const [showMap, setShowMap] = useState(false);
   const [isAddressConfirmed, setIsAddressConfirmed] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -134,9 +139,23 @@ export default function LemonadeApp() {
     switch (stepToUse) {
       case 0: return { type: 'phone', value: phoneNumber };
       case 1: return { type: 'address', value: address };
-      case 2: return { type: 'budget', value: budget };
-      case 3: return { type: 'allergy', value: allergies };
-      case 4: return { type: 'preference', value: preferences };
+      case 2: {
+        // 将选中的过敏原ID转换为中文标签
+        const allergyLabels = selectedAllergies.map(id => {
+          const option = ALLERGY_OPTIONS.find(opt => opt.id === id);
+          return option ? option.label : id;
+        });
+        return { type: 'allergy', value: allergyLabels.length > 0 ? allergyLabels.join(', ') : '无忌口' };
+      }
+      case 3: {
+        // 将选中的偏好ID转换为中文标签
+        const preferenceLabels = selectedPreferences.map(id => {
+          const option = PREFERENCE_OPTIONS.find(opt => opt.id === id);
+          return option ? option.label : id;
+        });
+        return { type: 'preference', value: preferenceLabels.length > 0 ? preferenceLabels.join(', ') : '无特殊偏好' };
+      }
+      case 4: return { type: 'budget', value: budget };
       default: return null;
     }
   };
@@ -162,11 +181,11 @@ export default function LemonadeApp() {
           return validatePhoneNumber(phoneNumber) && phoneNumber.length === 11 && isPhoneVerified;
         case 'address':
           return !!address.trim() && address.trim().length >= 5;
-        case 'budget':
-          return !!budget.trim() && parseFloat(budget) >= 10;
         case 'allergy':
         case 'preference':
           return true;
+        case 'budget':
+          return !!budget.trim() && parseFloat(budget) >= 10;
         default:
           return true;
       }
@@ -179,11 +198,11 @@ export default function LemonadeApp() {
         return validatePhoneNumber(phoneNumber) && phoneNumber.length === 11 && isPhoneVerified;
       case 'address':
         return isAddressConfirmed && !!address.trim();
-      case 'budget':
-        return !!budget.trim() && parseFloat(budget) >= 10;
       case 'allergy':
       case 'preference':
         return true;
+      case 'budget':
+        return !!budget.trim() && parseFloat(budget) >= 10;
       default:
         return true;
     }
@@ -312,14 +331,36 @@ export default function LemonadeApp() {
         setShowMap(false);
         mapAnimation.setValue(0);
         break;
-      case 'budget':
-        setBudget(answerToEdit.value);
-        break;
       case 'allergy':
         setAllergies(answerToEdit.value);
+        // 从中文标签转换回ID
+        if (answerToEdit.value !== '无忌口') {
+          const labels = answerToEdit.value.split(', ');
+          const ids = labels.map(label => {
+            const option = ALLERGY_OPTIONS.find(opt => opt.label === label);
+            return option ? option.id : label;
+          });
+          setSelectedAllergies(ids);
+        } else {
+          setSelectedAllergies([]);
+        }
         break;
       case 'preference':
         setPreferences(answerToEdit.value);
+        // 从中文标签转换回ID
+        if (answerToEdit.value !== '无特殊偏好') {
+          const labels = answerToEdit.value.split(', ');
+          const ids = labels.map(label => {
+            const option = PREFERENCE_OPTIONS.find(opt => opt.label === label);
+            return option ? option.id : label;
+          });
+          setSelectedPreferences(ids);
+        } else {
+          setSelectedPreferences([]);
+        }
+        break;
+      case 'budget':
+        setBudget(answerToEdit.value);
         break;
     }
     
@@ -377,14 +418,36 @@ export default function LemonadeApp() {
           setShowMap(true);
           mapAnimation.setValue(1);
           break;
-        case 'budget':
-          setBudget(originalAnswerBeforeEdit.value);
-          break;
         case 'allergy':
           setAllergies(originalAnswerBeforeEdit.value);
+          // 从中文标签转换回ID
+          if (originalAnswerBeforeEdit.value !== '无忌口') {
+            const labels = originalAnswerBeforeEdit.value.split(', ');
+            const ids = labels.map(label => {
+              const option = ALLERGY_OPTIONS.find(opt => opt.label === label);
+              return option ? option.id : label;
+            });
+            setSelectedAllergies(ids);
+          } else {
+            setSelectedAllergies([]);
+          }
           break;
         case 'preference':
           setPreferences(originalAnswerBeforeEdit.value);
+          // 从中文标签转换回ID
+          if (originalAnswerBeforeEdit.value !== '无特殊偏好') {
+            const labels = originalAnswerBeforeEdit.value.split(', ');
+            const ids = labels.map(label => {
+              const option = PREFERENCE_OPTIONS.find(opt => opt.label === label);
+              return option ? option.id : label;
+            });
+            setSelectedPreferences(ids);
+          } else {
+            setSelectedPreferences([]);
+          }
+          break;
+        case 'budget':
+          setBudget(originalAnswerBeforeEdit.value);
           break;
       }
       
@@ -488,19 +551,17 @@ export default function LemonadeApp() {
           value={budget}
           onChangeText={setBudget}
           animationValue={inputSectionAnimation}
+          onSubmitEditing={editingStep === 4 ? handleFinishEditing : undefined}
         />
       );
     }
     
     if (stepData.showAllergyInput) {
       return (
-        <BaseInput
-          value={allergies}
-          onChangeText={setAllergies}
-          placeholder="忌口食物，如：海鲜、花生等（可选）"
-          iconName="warning"
-          multiline
-          onClear={() => setAllergies('')}
+        <ImageCheckbox
+          options={ALLERGY_OPTIONS}
+          selectedIds={selectedAllergies}
+          onSelectionChange={setSelectedAllergies}
           animationValue={inputSectionAnimation}
         />
       );
@@ -508,13 +569,10 @@ export default function LemonadeApp() {
     
     if (stepData.showPreferenceInput) {
       return (
-        <BaseInput
-          value={preferences}
-          onChangeText={setPreferences}
-          placeholder="口味偏好，如：不要太辣、多放香菜等（可选）"
-          iconName="favorite"
-          multiline
-          onClear={() => setPreferences('')}
+        <ImageCheckbox
+          options={PREFERENCE_OPTIONS}
+          selectedIds={selectedPreferences}
+          onSelectionChange={setSelectedPreferences}
           animationValue={inputSectionAnimation}
         />
       );

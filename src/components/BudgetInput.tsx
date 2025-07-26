@@ -8,12 +8,14 @@ interface BudgetInputProps {
   value: string;
   onChangeText: (text: string) => void;
   animationValue?: Animated.Value;
+  onSubmitEditing?: () => void;
 }
 
 export const BudgetInput: React.FC<BudgetInputProps> = ({
   value,
   onChangeText,
   animationValue,
+  onSubmitEditing,
 }) => {
   const WrapperComponent = animationValue ? Animated.View : View;
   const wrapperProps = animationValue 
@@ -62,6 +64,7 @@ export const BudgetInput: React.FC<BudgetInputProps> = ({
         keyboardType="numeric"
         returnKeyType="done"
         onClear={() => onChangeText('')}
+        onSubmitEditing={onSubmitEditing}
       />
     </WrapperComponent>
   );

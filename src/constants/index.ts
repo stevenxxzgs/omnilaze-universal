@@ -47,9 +47,9 @@ export const BUDGET_OPTIONS = ['30', '50', '100', '200'] as const;
 export const STEP_TITLES = [
   "配送地址",
   "联系方式", 
-  "预算设置",
   "忌口说明",
-  "口味偏好"
+  "口味偏好",
+  "预算设置"
 ] as const;
 
 export const VALIDATION = {
