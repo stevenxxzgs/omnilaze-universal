@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Image, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, Image, Animated, TouchableOpacity, Pressable } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { questionStyles, avatarStyles, answerStyles } from '../styles/globalStyles';
 import type { Answer } from '../types';
@@ -66,7 +66,7 @@ export const CompletedQuestion: React.FC<CompletedQuestionProps> = ({
             {editingButtons}
           </View>
         ) : (
-          <Animated.View 
+          <Pressable
             style={[
               answerStyles.completedAnswerText,
               {
@@ -79,25 +79,28 @@ export const CompletedQuestion: React.FC<CompletedQuestionProps> = ({
                 }],
               },
             ]}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
+            onPressIn={() => setIsHovered(true)}
+            onPressOut={() => setIsHovered(false)}
+            onLongPress={() => setIsHovered(!isHovered)}
           >
-            <View 
-              style={answerStyles.answerWithEdit}
-            >
-              <Text style={answerStyles.answerValue}>
-                {formatAnswerDisplay(answer)}
-              </Text>
-              {isHovered && (
-                <TouchableOpacity 
-                  onPress={onEdit}
-                  style={answerStyles.editAnswerButton}
-                >
-                  <MaterialIcons name="edit" size={22} color="#4B5563" />
-                </TouchableOpacity>
-              )}
-            </View>
-          </Animated.View>
+            <Animated.View>
+              <View 
+                style={answerStyles.answerWithEdit}
+              >
+                <Text style={answerStyles.answerValue}>
+                  {formatAnswerDisplay(answer)}
+                </Text>
+                {isHovered && (
+                  <TouchableOpacity 
+                    onPress={onEdit}
+                    style={answerStyles.editAnswerButton}
+                  >
+                    <MaterialIcons name="edit" size={22} color="#4B5563" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </Animated.View>
+          </Pressable>
         )}
       </View>
     </Animated.View>
