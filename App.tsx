@@ -23,10 +23,16 @@ import { MapComponent } from './src/components/MapComponent';
 import { ActionButton } from './src/components/ActionButton';
 import { ImageCheckbox } from './src/components/ImageCheckbox';
 import { AuthComponent, AuthResult } from './src/components/AuthComponent';
+import { PaymentComponent } from './src/components/PaymentComponent';
+import { UserMenu } from './src/components/UserMenu';
+import { InviteModal } from './src/components/InviteModal';
 
 // Services - 移除鉴权相关API导入，因为AuthComponent已经包含
 // import { sendVerificationCode, verifyCodeAndLogin } from './src/services/api';
 import { createOrder, submitOrder } from './src/services/api';
+
+// Utils
+import { CookieManager } from './src/utils/cookieManager';
 
 // Hooks
 import { 
@@ -38,7 +44,7 @@ import {
 
 // Data & Types
 import { STEP_CONTENT } from './src/data/stepContent';
-import { ALLERGY_OPTIONS, PREFERENCE_OPTIONS } from './src/data/checkboxOptions';
+import { ALLERGY_OPTIONS, PREFERENCE_OPTIONS, FOOD_TYPE_OPTIONS } from './src/data/checkboxOptions';
 import type { CompletedAnswers, InputFocus, Answer } from './src/types';
 
 // Styles
@@ -55,6 +61,9 @@ export default function LemonadeApp() {
   // 新增复选框状态
   const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
   const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
+  const [selectedFoodType, setSelectedFoodType] = useState<string[]>([]);
+  const [otherAllergyText, setOtherAllergyText] = useState('');
+  const [otherPreferenceText, setOtherPreferenceText] = useState('');
   const [showMap, setShowMap] = useState(false);
   const [isAddressConfirmed, setIsAddressConfirmed] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -76,6 +85,54 @@ export default function LemonadeApp() {
   // 订单相关状态
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [isOrderSubmitting, setIsOrderSubmitting] = useState(false);
+  const [isSearchingRestaurant, setIsSearchingRestaurant] = useState(false);
+
+  // 用户菜单相关状态
+  const [showInviteModal, setShowInviteModal] = useState(false);
+
+  // 登出处理函数
+  const handleLogout = () => {
+    // 清除所有Cookie
+    CookieManager.clearUserSession();
+    CookieManager.clearConversationState();
+    
+    // 重置所有状态
+    setIsAuthenticated(false);
+    setAuthResult(null);
+    setCurrentStep(0);
+    setCompletedAnswers({});
+    setAddress('');
+    setBudget('');
+    setSelectedAllergies([]);
+    setSelectedPreferences([]);
+    setSelectedFoodType([]);
+    setOtherAllergyText('');
+    setOtherPreferenceText('');
+    setIsAddressConfirmed(false);
+    setShowMap(false);
+    setEditingStep(null);
+    setOriginalAnswerBeforeEdit(null);
+    setCurrentOrderId(null);
+    setIsOrderSubmitting(false);
+    setIsSearchingRestaurant(false);
+    setInputError('');
+    
+    // 重置动画
+    mapAnimation.setValue(0);
+    inputSectionAnimation.setValue(0);
+    currentQuestionAnimation.setValue(0);
+    
+    // 清除本地存储（兼容性）
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('phone_number');
+    
+    console.log('用户已登出，所有状态已重置');
+  };
+
+  // 邀请处理函数
+  const handleInvite = () => {
+    setShowInviteModal(true);
+  };
 
   // Custom hooks
   const { displayedText, isTyping, showCursor, typeText, setDisplayedText } = useTypewriterEffect();
@@ -95,6 +152,43 @@ export default function LemonadeApp() {
   } = useAnimations();
 
   // Effects
+  // 组件加载时检查Cookie登录状态
+  useEffect(() => {
+    const savedSession = CookieManager.getUserSession();
+    if (savedSession) {
+      // 自动登录
+      setIsAuthenticated(true);
+      setAuthResult({
+        userId: savedSession.userId,
+        phoneNumber: savedSession.phoneNumber,
+        isNewUser: savedSession.isNewUser
+      });
+      
+      // 恢复对话状态
+      const savedConversation = CookieManager.getConversationState();
+      if (savedConversation) {
+        setCurrentStep(savedConversation.currentStep || 0);
+        setCompletedAnswers(savedConversation.completedAnswers || {});
+        setAddress(savedConversation.address || '');
+        setBudget(savedConversation.budget || '');
+        setSelectedAllergies(savedConversation.selectedAllergies || []);
+        setSelectedPreferences(savedConversation.selectedPreferences || []);
+        setSelectedFoodType(savedConversation.selectedFoodType || []);
+        setOtherAllergyText(savedConversation.otherAllergyText || '');
+        setOtherPreferenceText(savedConversation.otherPreferenceText || '');
+        setIsAddressConfirmed(savedConversation.isAddressConfirmed || false);
+        setShowMap(savedConversation.showMap || false);
+        
+        // 恢复地图动画状态
+        if (savedConversation.showMap) {
+          mapAnimation.setValue(1);
+        }
+      }
+      
+      console.log('自动登录成功:', savedSession);
+    }
+  }, []);
+
   useEffect(() => {
     // 只在非编辑模式下触发打字机效果
     if (editingStep === null && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep]) {
@@ -143,7 +237,10 @@ export default function LemonadeApp() {
     setIsAuthenticated(true);
     setAuthResult(result);
     
-    // 保存用户信息到本地存储
+    // 保存用户会话到Cookie
+    CookieManager.saveUserSession(result.userId!, result.phoneNumber, result.isNewUser || false);
+    
+    // 保存用户信息到本地存储（兼容性）
     if (result.userId) {
       localStorage.setItem('user_id', result.userId);
       localStorage.setItem('phone_number', result.phoneNumber);
@@ -161,6 +258,33 @@ export default function LemonadeApp() {
       // useEffect会自动触发打字机效果，不需要手动调用
     }, 500);
   };
+
+  // 保存对话状态到Cookie
+  const saveConversationState = () => {
+    if (isAuthenticated) {
+      const conversationState = {
+        currentStep,
+        completedAnswers,
+        address,
+        budget,
+        selectedAllergies,
+        selectedPreferences,
+        selectedFoodType,
+        otherAllergyText,
+        otherPreferenceText,
+        isAddressConfirmed,
+        showMap
+      };
+      CookieManager.saveConversationState(conversationState);
+    }
+  };
+
+  // 监听状态变化，自动保存对话状态
+  useEffect(() => {
+    if (isAuthenticated) {
+      saveConversationState();
+    }
+  }, [currentStep, completedAnswers, address, budget, selectedAllergies, selectedPreferences, selectedFoodType, otherAllergyText, otherPreferenceText, isAddressConfirmed, showMap]);
   
   // 鉴权问题文本变化回调
   const handleAuthQuestionChange = (question: string) => {
@@ -192,25 +316,38 @@ export default function LemonadeApp() {
     // 编辑模式下使用编辑步骤，否则使用当前步骤
     const stepToUse = editingStep !== null ? editingStep : currentStep;
     switch (stepToUse) {
-      // case 0: return { type: 'phone', value: phoneNumber }; // 移除手机号步骤，由AuthComponent管理
-      case 0: return { type: 'address', value: address }; // 地址成为第一步
+      case 0: return { type: 'address', value: address }; // 地址
       case 1: {
-        // 将选中的过敏原ID转换为中文标签
+        // 将选中的食物类型ID转换为中文标签
+        const foodTypeLabels = selectedFoodType.map(id => {
+          const option = FOOD_TYPE_OPTIONS.find(opt => opt.id === id);
+          return option ? option.label : id;
+        });
+        return { type: 'foodType', value: foodTypeLabels.length > 0 ? foodTypeLabels.join(', ') : '未选择' };
+      }
+      case 2: {
+        // 将选中的过敏原ID转换为中文标签，如果选择了"其他"则包含用户输入的内容
         const allergyLabels = selectedAllergies.map(id => {
+          if (id === 'other-allergy') {
+            return otherAllergyText ? `其他: ${otherAllergyText}` : '其他';
+          }
           const option = ALLERGY_OPTIONS.find(opt => opt.id === id);
           return option ? option.label : id;
         });
         return { type: 'allergy', value: allergyLabels.length > 0 ? allergyLabels.join(', ') : '无忌口' };
       }
-      case 2: {
-        // 将选中的偏好ID转换为中文标签
+      case 3: {
+        // 将选中的偏好ID转换为中文标签，如果选择了"其他"则包含用户输入的内容
         const preferenceLabels = selectedPreferences.map(id => {
+          if (id === 'other-preference') {
+            return otherPreferenceText ? `其他: ${otherPreferenceText}` : '其他';
+          }
           const option = PREFERENCE_OPTIONS.find(opt => opt.id === id);
           return option ? option.label : id;
         });
         return { type: 'preference', value: preferenceLabels.length > 0 ? preferenceLabels.join(', ') : '无特殊偏好' };
       }
-      case 3: return { type: 'budget', value: budget };
+      case 4: return { type: 'budget', value: budget }; // 预算
       default: return null;
     }
   };
@@ -223,6 +360,7 @@ export default function LemonadeApp() {
       case 'budget': return `¥${answer.value}`;
       case 'allergy': return answer.value || '无忌口';
       case 'preference': return answer.value || '无特殊偏好';
+      case 'foodType': return answer.value || '未选择';
       default: return answer.value;
     }
   };
@@ -237,9 +375,10 @@ export default function LemonadeApp() {
     if (editingStep !== null) {
       const stepData = STEP_CONTENT[editingStep];
       switch (stepData.inputType) {
-        // case 'phone': // 移除手机号验证，由AuthComponent管理
         case 'address':
           return !!address.trim() && address.trim().length >= 5;
+        case 'foodType':
+          return selectedFoodType.length > 0;
         case 'allergy':
         case 'preference':
           return true;
@@ -253,9 +392,10 @@ export default function LemonadeApp() {
     // 正常流程的验证逻辑
     const stepData = getCurrentStepData();
     switch (stepData.inputType) {
-      // case 'phone': // 移除手机号验证，由AuthComponent管理
       case 'address':
         return isAddressConfirmed && !!address.trim();
+      case 'foodType':
+        return selectedFoodType.length > 0;
       case 'allergy':
       case 'preference':
         return true;
@@ -313,13 +453,26 @@ export default function LemonadeApp() {
     }).start(() => {
       // 减少延迟以避免闪烁
       setTimeout(() => {
-        if (currentStep < STEP_CONTENT.length - 1) {
-          setCurrentStep(currentStep + 1);
+        // 实现条件跳转逻辑
+        let nextStep = currentStep + 1;
+        
+        // 如果当前是食物类型选择步骤（步骤1）
+        if (currentStep === 1) {
+          const isSelectedDrink = selectedFoodType.includes('drink');
+          if (isSelectedDrink) {
+            // 选择了喝奶茶，跳过忌口(2)和偏好(3)，直接到预算(4)
+            nextStep = 4;
+          }
+          // 选择了吃饭，正常进入忌口步骤(2)
+        }
+        
+        if (nextStep < STEP_CONTENT.length) {
+          setCurrentStep(nextStep);
         } else {
           // 最后一步完成，创建订单
           handleCreateOrder();
         }
-      }, 200); // 减少延迟从400ms到200ms
+      }, 200);
     });
   };
 
@@ -395,6 +548,30 @@ export default function LemonadeApp() {
     }
   };
 
+  // 确认下单后开始搜索餐厅
+  const handleConfirmOrder = () => {
+    setIsSearchingRestaurant(true);
+    changeEmotion('🔍');
+    
+    // 立即标记支付步骤为完成，隐藏PaymentComponent
+    setCompletedAnswers(prev => ({
+      ...prev,
+      [currentStep]: { type: 'payment', value: '已确认支付' }
+    }));
+    
+    // 显示搜索餐厅的文本
+    setTimeout(() => {
+      typeText('正在为你寻找合适外卖...', 40);
+    }, 500);
+    
+    // 模拟搜索过程，5秒后显示完成
+    setTimeout(() => {
+      setIsSearchingRestaurant(false);
+      changeEmotion('🎉');
+      typeText('🎊 完美！已为您找到最合适的餐厅，订单已提交！', 40);
+    }, 5000);
+  };
+
   const handleEditAddress = () => {
     setIsAddressConfirmed(false);
     setShowMap(false);
@@ -412,12 +589,24 @@ export default function LemonadeApp() {
     
     // 恢复编辑步骤的输入值
     switch (answerToEdit.type) {
-      // case 'phone': // 手机号不能编辑，由AuthComponent管理
       case 'address':
         setAddress(answerToEdit.value);
         setIsAddressConfirmed(false);
         setShowMap(false);
         mapAnimation.setValue(0);
+        break;
+      case 'foodType':
+        // 从中文标签转换回ID
+        if (answerToEdit.value !== '未选择') {
+          const labels = answerToEdit.value.split(', ');
+          const ids = labels.map(label => {
+            const option = FOOD_TYPE_OPTIONS.find(opt => opt.label === label);
+            return option ? option.id : label;
+          });
+          setSelectedFoodType(ids);
+        } else {
+          setSelectedFoodType([]);
+        }
         break;
       case 'allergy':
         setAllergies(answerToEdit.value);
@@ -482,6 +671,42 @@ export default function LemonadeApp() {
         setTimeout(() => setShowMap(true), 500);
       }
       
+      // 特殊处理食物类型编辑后的步骤调整
+      if (editingStep === 1) {
+        const isSelectedDrink = selectedFoodType.includes('drink');
+        
+        if (isSelectedDrink) {
+          // 如果改选为喝奶茶，需要清除之后的忌口和偏好答案，并跳转到当前最高有效步骤
+          const newCompletedAnswers = { ...completedAnswers };
+          delete newCompletedAnswers[2]; // 删除忌口答案
+          delete newCompletedAnswers[3]; // 删除偏好答案
+          setCompletedAnswers({
+            ...newCompletedAnswers,
+            [editingStep]: currentAnswer
+          });
+          
+          // 重置忌口和偏好选择
+          setSelectedAllergies([]);
+          setSelectedPreferences([]);
+          
+          // 如果当前步骤大于等于预算步骤(4)，跳转到预算步骤
+          if (currentStep >= 4) {
+            setCurrentStep(4);
+          } else if (currentStep > 1) {
+            // 如果当前在忌口或偏好步骤，跳转到预算步骤
+            setCurrentStep(4);
+          }
+        } else {
+          // 如果改选为吃饭，保持正常流程
+          if (currentStep > 1 && currentStep < 4) {
+            // 如果当前在忌口到偏好之间，保持当前步骤
+          } else if (currentStep >= 4) {
+            // 如果当前在预算或之后，回到忌口步骤继续
+            setCurrentStep(2);
+          }
+        }
+      }
+      
       // 退出编辑模式
       setEditingStep(null);
       setOriginalAnswerBeforeEdit(null);
@@ -492,12 +717,24 @@ export default function LemonadeApp() {
     if (editingStep !== null && originalAnswerBeforeEdit) {
       // 恢复原始答案的输入值
       switch (originalAnswerBeforeEdit.type) {
-        // case 'phone': // 手机号不能编辑，由AuthComponent管理
         case 'address':
           setAddress(originalAnswerBeforeEdit.value);
           setIsAddressConfirmed(true);
           setShowMap(true);
           mapAnimation.setValue(1);
+          break;
+        case 'foodType':
+          // 从中文标签转换回ID
+          if (originalAnswerBeforeEdit.value !== '未选择') {
+            const labels = originalAnswerBeforeEdit.value.split(', ');
+            const ids = labels.map(label => {
+              const option = FOOD_TYPE_OPTIONS.find(opt => opt.label === label);
+              return option ? option.id : label;
+            });
+            setSelectedFoodType(ids);
+          } else {
+            setSelectedFoodType([]);
+          }
           break;
         case 'allergy':
           setAllergies(originalAnswerBeforeEdit.value);
@@ -592,13 +829,25 @@ export default function LemonadeApp() {
     
     // 手机号输入已移动到AuthComponent
     
+    if (stepData.showFoodTypeInput) {
+      return (
+        <ImageCheckbox
+          options={FOOD_TYPE_OPTIONS}
+          selectedIds={selectedFoodType}
+          onSelectionChange={setSelectedFoodType}
+          animationValue={inputSectionAnimation}
+          singleSelect={true}
+        />
+      );
+    }
+    
     if (stepData.showBudgetInput) {
       return (
         <BudgetInput
           value={budget}
           onChangeText={setBudget}
           animationValue={inputSectionAnimation}
-          onSubmitEditing={editingStep === 3 ? handleFinishEditing : undefined}
+          onSubmitEditing={editingStep === 4 ? handleFinishEditing : undefined}
           errorMessage={inputError}
         />
       );
@@ -611,6 +860,7 @@ export default function LemonadeApp() {
           selectedIds={selectedAllergies}
           onSelectionChange={setSelectedAllergies}
           animationValue={inputSectionAnimation}
+          onOtherTextChange={setOtherAllergyText}
         />
       );
     }
@@ -623,6 +873,17 @@ export default function LemonadeApp() {
           onSelectionChange={setSelectedPreferences}
           animationValue={inputSectionAnimation}
           singleSelect={true}
+          onOtherTextChange={setOtherPreferenceText}
+        />
+      );
+    }
+    
+    if (stepData.showPayment) {
+      return (
+        <PaymentComponent
+          budget={budget}
+          animationValue={inputSectionAnimation}
+          onConfirmOrder={handleConfirmOrder}
         />
       );
     }
@@ -688,6 +949,24 @@ export default function LemonadeApp() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#F2F2F2" />
+      
+      {/* 用户菜单 - 仅在登录后显示 */}
+      {isAuthenticated && (
+        <UserMenu
+          isVisible={true}
+          onLogout={handleLogout}
+          onInvite={handleInvite}
+        />
+      )}
+      
+      {/* 邀请弹窗 */}
+      {authResult && (
+        <InviteModal
+          isVisible={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          userPhoneNumber={authResult.phoneNumber}
+        />
+      )}
       
       <ProgressSteps currentStep={currentStep} />
 
@@ -757,8 +1036,11 @@ export default function LemonadeApp() {
                 </CurrentQuestion>
               )}
 
-              {/* Current Question - 只在正常流程下显示，编辑模式下不显示 */}
-              {isAuthenticated && editingStep === null && currentStep < STEP_CONTENT.length && !completedAnswers[currentStep] && (
+              {/* Current Question - 正常流程、搜索状态显示 */}
+              {isAuthenticated && editingStep === null && (
+                (currentStep < STEP_CONTENT.length && !completedAnswers[currentStep] && !STEP_CONTENT[currentStep]?.showPayment) ||
+                isSearchingRestaurant
+              ) && (
                 <CurrentQuestion
                   displayedText={displayedText}
                   isTyping={isTyping}

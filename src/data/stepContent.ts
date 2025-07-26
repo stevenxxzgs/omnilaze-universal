@@ -7,6 +7,11 @@ export const STEP_CONTENT: StepContent[] = [
     inputType: "address"
   },
   {
+    message: "你想要吃饭还是喝奶茶？",
+    showFoodTypeInput: true,
+    inputType: "foodType"
+  },
+  {
     message: "你有什么忌口？",
     showAllergyInput: true,
     inputType: "allergy"
@@ -22,8 +27,8 @@ export const STEP_CONTENT: StepContent[] = [
     inputType: "budget"
   },
   {
-    message: "太棒了！正在为您推荐最合适的外卖...",
-    showCompleted: true,
-    inputType: "completed"
+    message: "请扫码支付订单金额并确认下单",
+    showPayment: true,
+    inputType: "payment"
   }
 ];
