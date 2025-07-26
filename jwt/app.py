@@ -3,6 +3,7 @@ import random
 import string
 import time
 import json
+import uuid
 from datetime import datetime, timedelta, timezone
 from supabase import create_client, Client
 import os
@@ -49,6 +50,8 @@ def generate_verification_code():
 dev_verification_codes = {}
 dev_users = {}
 dev_invite_codes = {'1234': True, 'WELCOME': True, 'LANDE': True, 'OMNILAZE': True, 'ADVX2025': True}  # 有效的邀请码
+# 开发模式订单存储
+dev_orders = {}
 
 def store_verification_code(phone_number, code):
     if DEVELOPMENT_MODE:
@@ -301,6 +304,259 @@ def verify_invite_code_and_create_user(phone_number, invite_code):
             }
         except Exception as e:
             return {"success": False, "message": f"用户创建失败: {str(e)}"}
+
+def generate_order_number():
+    """生成订单号"""
+    today = datetime.now().strftime('%Y%m%d')
+    if DEVELOPMENT_MODE:
+        # 开发模式：简单计数
+        daily_count = len([o for o in dev_orders.values() if o['order_date'] == datetime.now().date().isoformat()]) + 1
+    else:
+        # 生产模式：使用数据库函数
+        return None  # 让数据库触发器自动生成
+    
+    return f"ORD{today}{daily_count:03d}"
+
+def create_order(user_id, phone_number, form_data):
+    """创建订单"""
+    print(f"📋 创建订单: 用户 {user_id}")
+    
+    order_number = generate_order_number()
+    current_time = datetime.now(timezone.utc)
+    
+    order_data = {
+        'order_number': order_number,
+        'user_id': user_id,
+        'phone_number': phone_number,
+        'status': 'draft',
+        'order_date': current_time.date().isoformat(),
+        'created_at': current_time.isoformat(),
+        'delivery_address': form_data.get('address', ''),
+        'dietary_restrictions': json.dumps(form_data.get('allergies', []), ensure_ascii=False),
+        'food_preferences': json.dumps(form_data.get('preferences', []), ensure_ascii=False),
+        'budget_amount': float(form_data.get('budget', 0)),
+        'budget_currency': 'CNY',
+        'is_deleted': False
+    }
+    
+    if DEVELOPMENT_MODE:
+        # 开发模式：存储到内存
+        order_id = str(uuid.uuid4())
+        order_data['id'] = order_id
+        dev_orders[order_id] = order_data
+        
+        print(f"✅ 开发模式 - 订单创建成功: {order_number}")
+        return {
+            "success": True,
+            "message": "订单创建成功",
+            "order_id": order_id,
+            "order_number": order_number
+        }
+    else:
+        # 生产模式：存储到Supabase
+        try:
+            result = supabase.table('orders').insert(order_data).execute()
+            order_id = result.data[0]['id']
+            actual_order_number = result.data[0]['order_number']
+            
+            print(f"✅ 生产模式 - 订单创建成功: {actual_order_number}")
+            return {
+                "success": True,
+                "message": "订单创建成功",
+                "order_id": order_id,
+                "order_number": actual_order_number
+            }
+        except Exception as e:
+            print(f"❌ 订单创建失败: {str(e)}")
+            return {"success": False, "message": f"订单创建失败: {str(e)}"}
+
+def submit_order(order_id):
+    """提交订单"""
+    print(f"📤 提交订单: {order_id}")
+    
+    if DEVELOPMENT_MODE:
+        # 开发模式
+        if order_id not in dev_orders:
+            return {"success": False, "message": "订单不存在"}
+        
+        dev_orders[order_id]['status'] = 'submitted'
+        dev_orders[order_id]['submitted_at'] = datetime.now(timezone.utc).isoformat()
+        dev_orders[order_id]['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        print(f"✅ 开发模式 - 订单提交成功: {dev_orders[order_id]['order_number']}")
+        return {
+            "success": True,
+            "message": "订单提交成功",
+            "order_number": dev_orders[order_id]['order_number']
+        }
+    else:
+        # 生产模式
+        try:
+            result = supabase.table('orders').update({
+                'status': 'submitted',
+                'submitted_at': datetime.now(timezone.utc).isoformat()
+            }).eq('id', order_id).execute()
+            
+            if not result.data:
+                return {"success": False, "message": "订单不存在"}
+            
+            print(f"✅ 生产模式 - 订单提交成功: {result.data[0]['order_number']}")
+            return {
+                "success": True,
+                "message": "订单提交成功",
+                "order_number": result.data[0]['order_number']
+            }
+        except Exception as e:
+            print(f"❌ 订单提交失败: {str(e)}")
+            return {"success": False, "message": f"订单提交失败: {str(e)}"}
+
+def update_order_feedback(order_id, rating, feedback):
+    """更新订单反馈"""
+    print(f"⭐ 更新订单反馈: {order_id} - 评分: {rating}")
+    
+    if rating < 1 or rating > 5:
+        return {"success": False, "message": "评分必须在1-5之间"}
+    
+    feedback_data = {
+        'user_rating': rating,
+        'user_feedback': feedback,
+        'feedback_submitted_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    if DEVELOPMENT_MODE:
+        # 开发模式
+        if order_id not in dev_orders:
+            return {"success": False, "message": "订单不存在"}
+        
+        dev_orders[order_id].update(feedback_data)
+        dev_orders[order_id]['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        print(f"✅ 开发模式 - 反馈更新成功")
+        return {"success": True, "message": "反馈提交成功"}
+    else:
+        # 生产模式
+        try:
+            result = supabase.table('orders').update(feedback_data).eq('id', order_id).execute()
+            
+            if not result.data:
+                return {"success": False, "message": "订单不存在"}
+            
+            print(f"✅ 生产模式 - 反馈更新成功")
+            return {"success": True, "message": "反馈提交成功"}
+        except Exception as e:
+            print(f"❌ 反馈更新失败: {str(e)}")
+            return {"success": False, "message": f"反馈提交失败: {str(e)}"}
+
+@app.route('/create-order', methods=['POST'])
+def api_create_order():
+    """创建订单API"""
+    print(f"📋 收到创建订单请求")
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        phone_number = data.get('phone_number')
+        form_data = data.get('form_data', {})
+        
+        print(f"📋 订单数据: 用户{user_id}, 地址{form_data.get('address', '')[:20]}...")
+        
+        if not user_id or not phone_number:
+            return jsonify({"success": False, "message": "用户信息不能为空"}), 400
+        
+        if not form_data.get('address'):
+            return jsonify({"success": False, "message": "配送地址不能为空"}), 400
+        
+        if not form_data.get('budget') or float(form_data.get('budget', 0)) <= 0:
+            return jsonify({"success": False, "message": "预算金额无效"}), 400
+        
+        result = create_order(user_id, phone_number, form_data)
+        
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        print(f"❌ 创建订单API错误: {str(e)}")
+        return jsonify({"success": False, "message": f"服务器错误: {str(e)}"}), 500
+
+@app.route('/submit-order', methods=['POST'])
+def api_submit_order():
+    """提交订单API"""
+    print(f"📤 收到提交订单请求")
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        
+        print(f"📤 提交订单: {order_id}")
+        
+        if not order_id:
+            return jsonify({"success": False, "message": "订单ID不能为空"}), 400
+        
+        result = submit_order(order_id)
+        
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        print(f"❌ 提交订单API错误: {str(e)}")
+        return jsonify({"success": False, "message": f"服务器错误: {str(e)}"}), 500
+
+@app.route('/order-feedback', methods=['POST'])
+def api_order_feedback():
+    """订单反馈API"""
+    print(f"⭐ 收到订单反馈请求")
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        rating = data.get('rating')
+        feedback = data.get('feedback', '')
+        
+        print(f"⭐ 订单反馈: {order_id} - 评分: {rating}")
+        
+        if not order_id:
+            return jsonify({"success": False, "message": "订单ID不能为空"}), 400
+        
+        if not rating or not isinstance(rating, int):
+            return jsonify({"success": False, "message": "评分不能为空且必须为整数"}), 400
+        
+        result = update_order_feedback(order_id, rating, feedback)
+        
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        print(f"❌ 订单反馈API错误: {str(e)}")
+        return jsonify({"success": False, "message": f"服务器错误: {str(e)}"}), 500
+
+@app.route('/orders/<user_id>', methods=['GET'])
+def api_get_user_orders(user_id):
+    """获取用户订单列表API"""
+    print(f"📋 获取用户订单: {user_id}")
+    try:
+        if DEVELOPMENT_MODE:
+            # 开发模式：从内存获取
+            user_orders = [order for order in dev_orders.values() 
+                          if order['user_id'] == user_id and not order.get('is_deleted', False)]
+            user_orders.sort(key=lambda x: x['created_at'], reverse=True)
+        else:
+            # 生产模式：从Supabase获取
+            result = supabase.table('orders').select('*').eq('user_id', user_id).eq('is_deleted', False).order('created_at', desc=True).execute()
+            user_orders = result.data
+        
+        print(f"📋 找到 {len(user_orders)} 个订单")
+        return jsonify({
+            "success": True,
+            "orders": user_orders,
+            "count": len(user_orders)
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ 获取订单API错误: {str(e)}")
+        return jsonify({"success": False, "message": f"服务器错误: {str(e)}"}), 500
 
 @app.route('/verify-invite-code', methods=['POST'])
 def api_verify_invite_code():

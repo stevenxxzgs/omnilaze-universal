@@ -1,13 +1,13 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, Animated } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { SimpleIcon } from './SimpleIcon';
 import { inputStyles } from '../styles/inputStyles';
 
 interface BaseInputProps {
   value: string;
   onChangeText: (text: string) => void;
   placeholder: string;
-  iconName: keyof typeof MaterialIcons.glyphMap;
+  iconName: string;
   multiline?: boolean;
   keyboardType?: 'default' | 'numeric';
   maxLength?: number;
@@ -73,7 +73,7 @@ export const BaseInput: React.FC<BaseInputProps> = ({
   return (
     <WrapperComponent {...wrapperProps}>
       <View style={getWrapperStyle()}>
-        <MaterialIcons 
+        <SimpleIcon 
           name={iconName}
           size={20} 
           color="#B0B0B0" 
@@ -103,7 +103,7 @@ export const BaseInput: React.FC<BaseInputProps> = ({
             onPress={onClear}
             style={inputStyles.simpleInputClearButton}
           >
-            <MaterialIcons name="close" size={18} color="#9ca3af" />
+            <SimpleIcon name="close" size={18} color="#9ca3af" />
           </TouchableOpacity>
         )}
         {showEditButton && onEdit && (
@@ -111,7 +111,7 @@ export const BaseInput: React.FC<BaseInputProps> = ({
             onPress={onEdit}
             style={inputStyles.simpleInputEditButton}
           >
-            <MaterialIcons name="edit" size={18} color="#6b7280" />
+            <SimpleIcon name="edit" size={18} color="#6b7280" />
           </TouchableOpacity>
         )}
       </View>

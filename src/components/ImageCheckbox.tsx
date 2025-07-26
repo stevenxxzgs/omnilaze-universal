@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, Animated } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { SimpleIcon } from './SimpleIcon';
 import { StyleSheet } from 'react-native';
 import { COLORS } from '../constants';
 
@@ -117,7 +117,7 @@ export const ImageCheckbox: React.FC<ImageCheckboxProps> = ({
                 isSelected && styles.checkedBox
               ]}>
                 {isSelected && (
-                  <MaterialIcons 
+                  <SimpleIcon 
                     name="check" 
                     size={18} 
                     color={COLORS.WHITE} 

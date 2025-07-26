@@ -2,11 +2,6 @@ import { StepContent } from '../types';
 
 export const STEP_CONTENT: StepContent[] = [
   {
-    message: "你的手机号码是多少？",
-    showPhoneInput: true,
-    inputType: "phone"
-  },
-  {
     message: "你想在哪里收到你的外卖？",
     showAddressInput: true,
     inputType: "address"
