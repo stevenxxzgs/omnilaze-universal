@@ -20,9 +20,16 @@ export const useTypewriterEffect = () => {
 
   const typeText = (text: string, speed: number = TIMING.TYPING_SPEED) => {
     setIsTyping(true);
-    setDisplayedText('');
     
-    let index = 0;
+    // 立即显示第一个字符，避免任何闪烁
+    setDisplayedText(text.substring(0, 1));
+    
+    if (text.length <= 1) {
+      setIsTyping(false);
+      return;
+    }
+    
+    let index = 1;
     const timer = setInterval(() => {
       if (index < text.length) {
         setDisplayedText(text.substring(0, index + 1));

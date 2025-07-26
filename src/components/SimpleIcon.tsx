@@ -1,5 +1,13 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { View } from 'react-native';
+import { 
+  IoLocationSharp,
+  IoCall,
+  IoCheckmark,
+  IoClose,
+  IoPencil,
+  IoChatbubble,
+} from 'react-icons/io5';
 
 interface SimpleIconProps {
   name: string;
@@ -8,13 +16,13 @@ interface SimpleIconProps {
   style?: any;
 }
 
-const iconMap: { [key: string]: string } = {
-  'location-on': '📍',
-  'phone': '📱',
-  'check': '✓',
-  'close': '✕',
-  'edit': '✏️',
-  'sms': '💬',
+const iconMap: { [key: string]: any } = {
+  'location-on': IoLocationSharp,
+  'phone': IoCall,
+  'check': IoCheckmark,
+  'close': IoClose,
+  'edit': IoPencil,
+  'sms': IoChatbubble,
 };
 
 export const SimpleIcon: React.FC<SimpleIconProps> = ({ 
@@ -23,21 +31,18 @@ export const SimpleIcon: React.FC<SimpleIconProps> = ({
   color = '#000', 
   style 
 }) => {
+  const IconComponent = iconMap[name];
+  
+  if (!IconComponent) {
+    return null;
+  }
+
   return (
-    <Text 
-      style={[
-        { 
-          fontSize: size, 
-          color, 
-          lineHeight: size,
-          textAlign: 'center',
-          width: size,
-          height: size,
-        }, 
-        style
-      ]}
-    >
-      {iconMap[name] || '?'}
-    </Text>
+    <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
+      <IconComponent 
+        size={size} 
+        color={color}
+      />
+    </View>
   );
 };

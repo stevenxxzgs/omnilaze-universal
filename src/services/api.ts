@@ -69,16 +69,16 @@ export interface OrdersResponse {
 
 // API 基础 URL 配置
 const getApiBaseUrl = () => {
-  // 生产环境：使用环境变量中的 URL
+  // 生产环境：优先使用自定义域名
   if (process.env.NODE_ENV === 'production') {
-    return process.env.REACT_APP_API_URL || 'https://omnilaze-universal-api.stevenxxzg.workers.dev';
+    return process.env.REACT_APP_API_URL || 'https://api.omnilaze.co';
   }
   
   // 开发环境：检查本地服务器或使用线上地址
   const localUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
   
   // 如果设置了生产 URL 作为开发环境的备选，使用它
-  if (localUrl.startsWith('https://') && localUrl.includes('workers.dev')) {
+  if (localUrl.startsWith('https://') && (localUrl.includes('workers.dev') || localUrl.includes('omnilaze.co'))) {
     return localUrl;
   }
   

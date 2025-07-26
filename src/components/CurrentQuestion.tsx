@@ -70,9 +70,6 @@ export const CurrentQuestion: React.FC<CurrentQuestionProps> = ({
               {displayedText}
               {isTyping && showCursor && <Text style={questionStyles.cursor}>|</Text>}
             </Text>
-            {inputError && (
-              <Text style={questionStyles.errorText}>{inputError}</Text>
-            )}
             
             {currentStep === 5 && (
               <View style={loadingStyles.loadingContainer}>

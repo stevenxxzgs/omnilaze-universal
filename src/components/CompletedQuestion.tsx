@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Image, Animated, TouchableOpacity, Pressable } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { SimpleIcon } from './SimpleIcon';
 import { questionStyles, avatarStyles, answerStyles } from '../styles/globalStyles';
 import type { Answer } from '../types';
 
@@ -15,6 +15,7 @@ interface CompletedQuestionProps {
   isEditing?: boolean;
   editingInput?: React.ReactNode;
   editingButtons?: React.ReactNode;
+  canEdit?: boolean; // 新增：是否可以编辑
 }
 
 export const CompletedQuestion: React.FC<CompletedQuestionProps> = ({
@@ -28,6 +29,7 @@ export const CompletedQuestion: React.FC<CompletedQuestionProps> = ({
   isEditing = false,
   editingInput,
   editingButtons,
+  canEdit = true, // 默认可以编辑
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -82,6 +84,8 @@ export const CompletedQuestion: React.FC<CompletedQuestionProps> = ({
             onPressIn={() => setIsHovered(true)}
             onPressOut={() => setIsHovered(false)}
             onLongPress={() => setIsHovered(!isHovered)}
+            onHoverIn={() => setIsHovered(true)}
+            onHoverOut={() => setIsHovered(false)}
           >
             <Animated.View>
               <View 
@@ -90,12 +94,12 @@ export const CompletedQuestion: React.FC<CompletedQuestionProps> = ({
                 <Text style={answerStyles.answerValue}>
                   {formatAnswerDisplay(answer)}
                 </Text>
-                {isHovered && (
+                {canEdit && (
                   <TouchableOpacity 
                     onPress={onEdit}
                     style={answerStyles.editAnswerButton}
                   >
-                    <MaterialIcons name="edit" size={22} color="#4B5563" />
+                    <SimpleIcon name="edit" size={22} color="#4B5563" />
                   </TouchableOpacity>
                 )}
               </View>

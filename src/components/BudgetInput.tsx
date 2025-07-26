@@ -9,6 +9,7 @@ interface BudgetInputProps {
   onChangeText: (text: string) => void;
   animationValue?: Animated.Value;
   onSubmitEditing?: () => void;
+  errorMessage?: string; // 新增：错误信息
 }
 
 export const BudgetInput: React.FC<BudgetInputProps> = ({
@@ -16,6 +17,7 @@ export const BudgetInput: React.FC<BudgetInputProps> = ({
   onChangeText,
   animationValue,
   onSubmitEditing,
+  errorMessage, // 新增：错误信息
 }) => {
   const WrapperComponent = animationValue ? Animated.View : View;
   const wrapperProps = animationValue 
@@ -65,6 +67,7 @@ export const BudgetInput: React.FC<BudgetInputProps> = ({
         returnKeyType="done"
         onClear={() => onChangeText('')}
         onSubmitEditing={onSubmitEditing}
+        errorMessage={errorMessage}
       />
     </WrapperComponent>
   );

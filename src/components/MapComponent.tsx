@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Platform, Animated } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { SimpleIcon } from './SimpleIcon';
 import { mapStyles } from '../styles/mapStyles';
 
 interface MapComponentProps {
@@ -49,7 +49,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ showMap, mapAnimatio
   return (
     <View style={mapStyles.map}>
       <View style={mapStyles.nativeMapPlaceholder}>
-        <MaterialIcons name="location-on" size={48} color="#66CC99" />
+        <SimpleIcon name="location-on" size={48} color="#66CC99" />
         <Text style={mapStyles.nativeMapText}>Map View (Native)</Text>
         <Text style={mapStyles.nativeMapSubtext}>325 Kent Ave, Brooklyn, NY</Text>
       </View>
