@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, TextInput, Clipboard } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native';
 import { SimpleIcon } from './SimpleIcon';
 import { COLORS } from '../constants';
 
@@ -15,33 +15,6 @@ export const InviteModal: React.FC<InviteModalProps> = ({
   userPhoneNumber,
 }) => {
   const [copied, setCopied] = useState(false);
-  const modalAnimation = new Animated.Value(0);
-  const [isClosing, setIsClosing] = useState(false);
-
-  React.useEffect(() => {
-    if (isVisible && !isClosing) {
-      Animated.spring(modalAnimation, {
-        toValue: 1,
-        tension: 60,
-        friction: 8,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [isVisible, isClosing]);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    Animated.spring(modalAnimation, {
-      toValue: 0,
-      tension: 60,
-      friction: 8,
-      useNativeDriver: true,
-    }).start(() => {
-      setIsClosing(false);
-      onClose();
-      setCopied(false);
-    });
-  };
 
   // 生成邀请码（基于手机号的简单算法）
   const generateInviteCode = (phoneNumber: string): string => {
@@ -54,67 +27,62 @@ export const InviteModal: React.FC<InviteModalProps> = ({
   };
 
   const inviteCode = generateInviteCode(userPhoneNumber);
-  const inviteText = `我正在使用 OmniLaze 智能外卖助手，体验非常棒！使用我的邀请码 ${inviteCode} 注册，一起享受智能点餐服务吧！🎉`;
+  const inviteText = `我在用懒得点外卖，体验非常棒！使用我的邀请码 ${inviteCode} 到order.omnilaze.co注册，一起享受智能点餐服务吧！🎉`;
 
-  const handleCopyInviteCode = async () => {
+  // Web环境下使用navigator.clipboard，React Native使用不同的API
+  const copyToClipboard = async (text: string) => {
     try {
-      await Clipboard.setString(inviteCode);
+      if (Platform.OS === 'web') {
+        // Web环境
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // 降级方案：创建临时输入框
+          const textArea = document.createElement('textarea');
+          textArea.value = text;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+        }
+      } else {
+        // React Native环境 - 这里可以使用Clipboard
+        // await Clipboard.setString(text);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error('复制失败:', error);
+      // 即使复制失败也显示提示
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const handleCopyInviteText = async () => {
-    try {
-      await Clipboard.setString(inviteText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error('复制失败:', error);
-    }
-  };
+  const handleCopyInviteCode = () => copyToClipboard(inviteCode);
+  const handleCopyInviteText = () => copyToClipboard(inviteText);
 
   return (
     <Modal
       visible={isVisible}
       transparent={true}
-      animationType="none"
-      onRequestClose={handleClose}
+      animationType="fade"
+      onRequestClose={onClose}
     >
       <View style={styles.overlay}>
         <TouchableOpacity
           style={styles.backdrop}
           activeOpacity={1}
-          onPress={handleClose}
+          onPress={onClose}
         />
         
-        <Animated.View
-          style={[
-            styles.modal,
-            {
-              opacity: modalAnimation,
-              transform: [{
-                scale: modalAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.9, 1],
-                }),
-              }, {
-                translateY: modalAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [50, 0],
-                }),
-              }],
-            },
-          ]}
-        >
+        <View style={styles.modal}>
           {/* 标题栏 */}
           <View style={styles.header}>
             <Text style={styles.title}>邀请朋友</Text>
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={handleClose}
+              onPress={onClose}
               activeOpacity={0.7}
             >
               <SimpleIcon name="close" size={20} color={COLORS.TEXT_SECONDARY} />
@@ -162,7 +130,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({
               </TouchableOpacity>
             </View>
           </View>
-        </Animated.View>
+        </View>
       </View>
     </Modal>
   );

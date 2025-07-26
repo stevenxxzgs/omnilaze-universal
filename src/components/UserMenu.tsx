@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Platform } from 'react-native';
 import { SimpleIcon } from './SimpleIcon';
 import { COLORS } from '../constants';
 
@@ -15,40 +15,21 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   onInvite,
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
-  const dropdownAnimation = new Animated.Value(0);
 
   const toggleDropdown = () => {
-    if (showDropdown) {
-      // 隐藏下拉菜单
-      Animated.spring(dropdownAnimation, {
-        toValue: 0,
-        tension: 60,
-        friction: 8,
-        useNativeDriver: true,
-      }).start(() => {
-        setShowDropdown(false);
-      });
-    } else {
-      // 显示下拉菜单
-      setShowDropdown(true);
-      Animated.spring(dropdownAnimation, {
-        toValue: 1,
-        tension: 60,
-        friction: 8,
-        useNativeDriver: true,
-      }).start();
-    }
+    console.log('Toggle dropdown clicked, current state:', showDropdown);
+    setShowDropdown(!showDropdown);
   };
 
   const handleLogout = () => {
+    console.log('Logout clicked');
     setShowDropdown(false);
-    dropdownAnimation.setValue(0);
     onLogout();
   };
 
   const handleInvite = () => {
+    console.log('Invite clicked');
     setShowDropdown(false);
-    dropdownAnimation.setValue(0);
     onInvite();
   };
 
@@ -71,25 +52,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
 
       {/* 下拉菜单 */}
       {showDropdown && (
-        <Animated.View
-          style={[
-            styles.dropdown,
-            {
-              opacity: dropdownAnimation,
-              transform: [{
-                translateY: dropdownAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-10, 0],
-                }),
-              }, {
-                scale: dropdownAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.9, 1],
-                }),
-              }],
-            },
-          ]}
-        >
+        <View style={styles.dropdown}>
           <TouchableOpacity
             style={styles.menuItem}
             onPress={handleInvite}
@@ -109,14 +72,14 @@ export const UserMenu: React.FC<UserMenuProps> = ({
             <SimpleIcon name="exit" size={16} color="#ef4444" />
             <Text style={[styles.menuItemText, { color: '#ef4444' }]}>登出</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       )}
 
       {/* 点击外部关闭下拉菜单的遮罩 */}
       {showDropdown && (
         <TouchableOpacity
           style={styles.overlay}
-          onPress={() => toggleDropdown()}
+          onPress={() => setShowDropdown(false)}
           activeOpacity={1}
         />
       )}
@@ -170,6 +133,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
+    zIndex: 1001,
   },
   menuItem: {
     flexDirection: 'row',
@@ -189,11 +153,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   overlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: -1,
+    position: 'absolute',
+    top: -100,
+    left: -100,
+    width: 1000,
+    height: 1000,
+    zIndex: 999,
   },
 });
