@@ -184,7 +184,14 @@ export const rightContentStyles = StyleSheet.create({
     maxWidth: width > 768 ? 700 : '100%',
     alignSelf: 'center',
     paddingTop: width > 768 ? 90 : 60,
-  },
+    // 降低右侧内容的z-index，确保下拉框在其上方
+    ...Platform.select({
+      web: {
+        position: 'relative',
+        zIndex: 1,
+      },
+    }),
+  } as any,
 });
 
 export const loadingStyles = StyleSheet.create({
