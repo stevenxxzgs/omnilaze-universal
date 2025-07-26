@@ -20,9 +20,16 @@ export const useTypewriterEffect = () => {
 
   const typeText = (text: string, speed: number = TIMING.TYPING_SPEED) => {
     setIsTyping(true);
-    setDisplayedText('');
     
-    let index = 0;
+    // 立即显示第一个字符，避免任何闪烁
+    setDisplayedText(text.substring(0, 1));
+    
+    if (text.length <= 1) {
+      setIsTyping(false);
+      return;
+    }
+    
+    let index = 1;
     const timer = setInterval(() => {
       if (index < text.length) {
         setDisplayedText(text.substring(0, index + 1));
@@ -56,15 +63,7 @@ export const useValidation = () => {
     setInputError('');
     
     switch (step) {
-      case 0: // 手机号
-        if (!validatePhoneNumber(value)) {
-          const errorMessage = '请输入正确的11位手机号码';
-          setInputError(errorMessage);
-          return { isValid: false, errorMessage };
-        }
-        return { isValid: true };
-        
-      case 1: // 地址  
+      case 0: // 地址
         if (!value || value.trim().length < VALIDATION.MIN_ADDRESS_LENGTH) {
           const errorMessage = '请输入完整的配送地址';
           setInputError(errorMessage);
@@ -72,11 +71,11 @@ export const useValidation = () => {
         }
         return { isValid: true };
         
-      case 2: // 忌口
-      case 3: // 偏好
+      case 1: // 忌口
+      case 2: // 偏好
         return { isValid: true };
         
-      case 4: // 预算
+      case 3: // 预算
         const budgetNum = parseFloat(value);
         if (!value || budgetNum <= 0) {
           const errorMessage = '请设置一个合理的预算金额';
