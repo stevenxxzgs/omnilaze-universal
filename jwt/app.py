@@ -52,6 +52,8 @@ dev_users = {}
 dev_invite_codes = {'1234': True, 'WELCOME': True, 'LANDE': True, 'OMNILAZE': True, 'ADVX2025': True}  # 有效的邀请码
 # 开发模式订单存储
 dev_orders = {}
+# 开发模式用户序号计数器
+dev_user_sequence_counter = 0
 
 def store_verification_code(phone_number, code):
     if DEVELOPMENT_MODE:
@@ -162,8 +164,10 @@ def login_with_phone(phone_number, verification_code):
             user_id = f"dev_user_{len(dev_users) + 1}"
             print(f"🆕 检测到新用户: {phone_number}")
         else:
-            user_id = dev_users[phone_number]['id']
-            print(f"👤 老用户登录: {phone_number} (ID: {user_id})")
+            user_data = dev_users[phone_number]
+            user_id = user_data['id']
+            user_sequence = user_data.get('user_sequence', 0)
+            print(f"👤 老用户登录: {phone_number} (ID: {user_id}, 序号: {user_sequence})")
         
         print(f"✅ 开发模式 - 用户验证成功: {phone_number} (新用户: {is_new_user})")
     else:
@@ -186,6 +190,14 @@ def login_with_phone(phone_number, verification_code):
         "phone_number": phone_number,
         "is_new_user": is_new_user
     }
+    
+    # 如果是老用户，添加用户序号
+    if not is_new_user and DEVELOPMENT_MODE:
+        result["user_sequence"] = user_sequence
+    elif not is_new_user and not DEVELOPMENT_MODE:
+        # 生产模式：从数据库获取用户序号
+        # TODO: 这里需要在生产模式实现
+        pass
     
     print(f"📤 返回结果: {result}")
     return result
@@ -262,21 +274,27 @@ def verify_invite_code_and_create_user(phone_number, invite_code):
             print(f"❌ 邀请码无效: {invite_code}")
             return {"success": False, "message": "邀请码无效"}
         
-        # 创建新用户
-        user_id = f"dev_user_{len(dev_users) + 1}"
+        # 创建新用户，分配用户序号
+        global dev_user_sequence_counter
+        dev_user_sequence_counter += 1
+        user_sequence = dev_user_sequence_counter
+        user_id = f"dev_user_{user_sequence}"
+        
         dev_users[phone_number] = {
             'id': user_id,
             'phone_number': phone_number,
+            'user_sequence': user_sequence,
             'created_at': datetime.now(timezone.utc).isoformat(),
             'invite_code': invite_code
         }
         
-        print(f"✅ 开发模式 - 新用户创建成功: {phone_number} (ID: {user_id})")
+        print(f"✅ 开发模式 - 新用户创建成功: {phone_number} (ID: {user_id}, 序号: {user_sequence})")
         return {
             "success": True,
             "message": "新用户注册成功",
             "user_id": user_id,
-            "phone_number": phone_number
+            "phone_number": phone_number,
+            "user_sequence": user_sequence
         }
     else:
         # 生产模式：从Supabase验证邀请码
@@ -324,6 +342,22 @@ def create_order(user_id, phone_number, form_data):
     order_number = generate_order_number()
     current_time = datetime.now(timezone.utc)
     
+    # 获取用户的下一个序号
+    if DEVELOPMENT_MODE:
+        # 开发模式：计算该用户的订单序号
+        user_orders = [o for o in dev_orders.values() if o['user_id'] == user_id]
+        user_sequence_number = len(user_orders) + 1
+    else:
+        # 生产模式：从数据库查询最大序号
+        try:
+            result = supabase.from_('orders').select('user_sequence_number').eq('user_id', user_id).order('user_sequence_number', desc=True).limit(1).execute()
+            if result.data:
+                user_sequence_number = result.data[0]['user_sequence_number'] + 1
+            else:
+                user_sequence_number = 1
+        except:
+            user_sequence_number = 1
+    
     order_data = {
         'order_number': order_number,
         'user_id': user_id,
@@ -336,6 +370,7 @@ def create_order(user_id, phone_number, form_data):
         'food_preferences': json.dumps(form_data.get('preferences', []), ensure_ascii=False),
         'budget_amount': float(form_data.get('budget', 0)),
         'budget_currency': 'CNY',
+        'user_sequence_number': user_sequence_number,
         'is_deleted': False
     }
     
@@ -345,12 +380,13 @@ def create_order(user_id, phone_number, form_data):
         order_data['id'] = order_id
         dev_orders[order_id] = order_data
         
-        print(f"✅ 开发模式 - 订单创建成功: {order_number}")
+        print(f"✅ 开发模式 - 订单创建成功: {order_number} (用户序号: {user_sequence_number})")
         return {
             "success": True,
             "message": "订单创建成功",
             "order_id": order_id,
-            "order_number": order_number
+            "order_number": order_number,
+            "user_sequence_number": user_sequence_number
         }
     else:
         # 生产模式：存储到Supabase
@@ -359,12 +395,13 @@ def create_order(user_id, phone_number, form_data):
             order_id = result.data[0]['id']
             actual_order_number = result.data[0]['order_number']
             
-            print(f"✅ 生产模式 - 订单创建成功: {actual_order_number}")
+            print(f"✅ 生产模式 - 订单创建成功: {actual_order_number} (用户序号: {user_sequence_number})")
             return {
                 "success": True,
                 "message": "订单创建成功",
                 "order_id": order_id,
-                "order_number": actual_order_number
+                "order_number": actual_order_number,
+                "user_sequence_number": user_sequence_number
             }
         except Exception as e:
             print(f"❌ 订单创建失败: {str(e)}")
@@ -465,7 +502,13 @@ def api_create_order():
         if not form_data.get('address'):
             return jsonify({"success": False, "message": "配送地址不能为空"}), 400
         
-        if not form_data.get('budget') or float(form_data.get('budget', 0)) <= 0:
+        # 预算验证：允许免单订单的0金额，但不允许负数
+        budget = form_data.get('budget', 0)
+        try:
+            budget_amount = float(budget)
+            if budget_amount < 0:
+                return jsonify({"success": False, "message": "预算金额无效"}), 400
+        except (ValueError, TypeError):
             return jsonify({"success": False, "message": "预算金额无效"}), 400
         
         result = create_order(user_id, phone_number, form_data)
@@ -583,6 +626,165 @@ def api_verify_invite_code():
     except Exception as e:
         return jsonify({"success": False, "message": f"服务器错误: {str(e)}"}), 500
 
+# ===== 免单相关API =====
+
+# 开发模式的免单数据存储
+dev_user_invite_stats = {}  # 用户邀请统计
+dev_invite_progress = {}    # 邀请进度记录
+dev_free_drinks_remaining = 100  # 全局免单剩余数量
+
+@app.route('/get-user-invite-stats', methods=['GET'])
+def api_get_user_invite_stats():
+    """获取用户邀请统计API"""
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({"success": False, "message": "用户ID不能为空"}), 400
+        
+        if DEVELOPMENT_MODE:
+            # 开发模式：模拟邀请统计数据
+            if user_id not in dev_user_invite_stats:
+                # 模拟用户已邀请3人，可以获得免单
+                dev_user_invite_stats[user_id] = {
+                    'user_invite_code': f'USR{user_id[-6:]}',
+                    'current_uses': 3,
+                    'max_uses': 3,
+                    'remaining_uses': 0,
+                    'eligible_for_free_drink': True,
+                    'free_drink_claimed': False
+                }
+            
+            stats = dev_user_invite_stats[user_id]
+            stats['free_drinks_remaining'] = dev_free_drinks_remaining
+            
+            return jsonify({
+                "success": True,
+                **stats
+            }), 200
+        else:
+            # 生产模式：从Supabase查询
+            # TODO: 实现Supabase查询逻辑
+            return jsonify({"success": False, "message": "生产模式暂未实现"}), 501
+            
+    except Exception as e:
+        print(f"❌ 获取邀请统计错误: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/get-invite-progress', methods=['GET'])
+def api_get_invite_progress():
+    """获取用户邀请进度API"""
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({"success": False, "message": "用户ID不能为空"}), 400
+        
+        if DEVELOPMENT_MODE:
+            # 开发模式：模拟邀请进度数据
+            if user_id not in dev_invite_progress:
+                # 模拟3个邀请记录
+                dev_invite_progress[user_id] = {
+                    'invitations': [
+                        {
+                            'phone_number': '138****0001',
+                            'masked_phone': '138****0001',
+                            'invited_at': (datetime.now() - timedelta(days=5)).isoformat()
+                        },
+                        {
+                            'phone_number': '139****0002', 
+                            'masked_phone': '139****0002',
+                            'invited_at': (datetime.now() - timedelta(days=3)).isoformat()
+                        },
+                        {
+                            'phone_number': '182****7609',
+                            'masked_phone': '182****7609',
+                            'invited_at': datetime.now().isoformat()
+                        }
+                    ],
+                    'total_invitations': 3
+                }
+            
+            progress = dev_invite_progress[user_id]
+            return jsonify({
+                "success": True,
+                **progress
+            }), 200
+        else:
+            # 生产模式：从Supabase查询
+            # TODO: 实现Supabase查询逻辑
+            return jsonify({"success": False, "message": "生产模式暂未实现"}), 501
+            
+    except Exception as e:
+        print(f"❌ 获取邀请进度错误: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/claim-free-drink', methods=['POST'])
+def api_claim_free_drink():
+    """领取免单奶茶API"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        
+        if not user_id:
+            return jsonify({"success": False, "message": "用户ID不能为空"}), 400
+        
+        if DEVELOPMENT_MODE:
+            global dev_free_drinks_remaining
+            
+            # 检查用户是否有资格领取免单
+            if user_id not in dev_user_invite_stats:
+                return jsonify({"success": False, "message": "用户邀请信息不存在"}), 400
+            
+            user_stats = dev_user_invite_stats[user_id]
+            
+            if user_stats.get('free_drink_claimed', False):
+                return jsonify({"success": False, "message": "您已经领取过免单奶茶"}), 400
+            
+            if not user_stats.get('eligible_for_free_drink', False):
+                return jsonify({"success": False, "message": "邀请人数不足，无法领取免单"}), 400
+            
+            if dev_free_drinks_remaining <= 0:
+                return jsonify({"success": False, "message": "免单名额已用完"}), 400
+            
+            # 领取免单
+            user_stats['free_drink_claimed'] = True
+            dev_free_drinks_remaining -= 1
+            
+            print(f"🎉 用户 {user_id} 成功领取免单，剩余名额: {dev_free_drinks_remaining}")
+            
+            return jsonify({
+                "success": True,
+                "message": "免单领取成功！",
+                "free_drinks_remaining": dev_free_drinks_remaining
+            }), 200
+        else:
+            # 生产模式：更新Supabase
+            # TODO: 实现Supabase更新逻辑
+            return jsonify({"success": False, "message": "生产模式暂未实现"}), 501
+            
+    except Exception as e:
+        print(f"❌ 领取免单错误: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/free-drinks-remaining', methods=['GET'])
+def api_free_drinks_remaining():
+    """获取免单剩余数量API"""
+    try:
+        if DEVELOPMENT_MODE:
+            global dev_free_drinks_remaining
+            return jsonify({
+                "success": True,
+                "free_drinks_remaining": dev_free_drinks_remaining,
+                "message": f"还有 {dev_free_drinks_remaining} 个免单名额"
+            }), 200
+        else:
+            # 生产模式：从Supabase查询
+            # TODO: 实现Supabase查询逻辑
+            return jsonify({"success": False, "message": "生产模式暂未实现"}), 501
+            
+    except Exception as e:
+        print(f"❌ 获取免单剩余数量错误: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """健康检查API"""
@@ -590,7 +792,8 @@ def health_check():
         "status": "healthy", 
         "message": "API服务正常运行",
         "cors_origins": ["http://localhost:8081", "http://localhost:3000", "http://localhost:19006"],
-        "development_mode": DEVELOPMENT_MODE
+        "development_mode": DEVELOPMENT_MODE,
+        "free_drinks_remaining": dev_free_drinks_remaining if DEVELOPMENT_MODE else "unknown"
     }), 200
 
 if __name__ == '__main__':

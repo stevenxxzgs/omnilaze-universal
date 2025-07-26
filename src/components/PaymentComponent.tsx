@@ -8,6 +8,7 @@ interface PaymentComponentProps {
   animationValue: Animated.Value;
   onConfirmOrder: () => void;
   isTyping?: boolean; // 新增：是否正在打字
+  isFreeOrder?: boolean; // 新增：是否为免单
 }
 
 export const PaymentComponent: React.FC<PaymentComponentProps> = ({
@@ -15,6 +16,7 @@ export const PaymentComponent: React.FC<PaymentComponentProps> = ({
   animationValue,
   onConfirmOrder,
   isTyping = false,
+  isFreeOrder = false,
 }) => {
   const [showPaymentContent, setShowPaymentContent] = useState(false);
 
@@ -56,19 +58,40 @@ export const PaymentComponent: React.FC<PaymentComponentProps> = ({
       {showPaymentContent && (
         <>
           {/* 支付卡片 - 纵向瘦长布局 */}
-          <View style={styles.paymentCard}>
+          <View style={[styles.paymentCard, isFreeOrder && styles.freeOrderCard]}>
             <View style={styles.cardContent}>
-              <View style={styles.imageContainer}>
-                <Image 
-                  source={require('../../assets/food/支付二维码.png')} 
-                  style={styles.qrCodeImage}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={styles.textContainer}>
-                <Text style={styles.wechatText}>微信支付</Text>
-                <Text style={styles.budgetText}>支付金额：¥{budget}</Text>
-              </View>
+              {isFreeOrder ? (
+                // 免单显示
+                <View style={styles.freeOrderContainer}>
+                  <View style={styles.freeOrderIconContainer}>
+                    <Text style={styles.freeOrderIcon}>🎉</Text>
+                  </View>
+                  <Text style={styles.freeOrderTitle}>恭喜您！</Text>
+                  <Text style={styles.freeOrderSubtitle}>邀请奖励免单</Text>
+                  <View style={styles.freeOrderAmountContainer}>
+                    <Text style={styles.originalPrice}>原价：¥{budget}</Text>
+                    <Text style={styles.freePrice}>免单：¥0</Text>
+                  </View>
+                  <Text style={styles.freeOrderNote}>
+                    感谢您的邀请贡献 🧋
+                  </Text>
+                </View>
+              ) : (
+                // 正常支付显示
+                <>
+                  <View style={styles.imageContainer}>
+                    <Image 
+                      source={require('../../assets/food/支付二维码.png')} 
+                      style={styles.qrCodeImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <View style={styles.textContainer}>
+                    <Text style={styles.wechatText}>微信支付</Text>
+                    <Text style={styles.budgetText}>支付金额：¥{budget}</Text>
+                  </View>
+                </>
+              )}
             </View>
           </View>
           
@@ -76,7 +99,7 @@ export const PaymentComponent: React.FC<PaymentComponentProps> = ({
           <View style={styles.buttonContainer}>
             <ActionButton
               onPress={onConfirmOrder}
-              title="确认下单"
+              title={isFreeOrder ? "确认免单" : "确认下单"}
               isActive={true}
               animationValue={new Animated.Value(1)}
             />
@@ -146,5 +169,77 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: 16,
+  },
+  // 免单相关样式
+  freeOrderCard: {
+    borderColor: '#10b981',
+    backgroundColor: '#10b981',
+  },
+  freeOrderContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    height: '100%',
+  },
+  freeOrderIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  freeOrderIcon: {
+    fontSize: 40,
+  },
+  freeOrderTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  freeOrderSubtitle: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 20,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+  freeOrderAmountContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  originalPrice: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textDecorationLine: 'line-through',
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+  freePrice: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.6)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  freeOrderNote: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
 });

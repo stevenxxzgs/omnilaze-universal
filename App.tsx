@@ -26,6 +26,8 @@ import { AuthComponent, AuthResult } from './src/components/AuthComponent';
 import { PaymentComponent } from './src/components/PaymentComponent';
 import { UserMenu } from './src/components/UserMenu';
 import { InviteModal } from './src/components/InviteModal';
+import { InviteModalWithFreeDrink } from './src/components/InviteModalWithFreeDrink';
+import { AddressAutocomplete } from './src/components/AddressAutocomplete';
 
 
 // Services - 移除鉴权相关API导入，因为AuthComponent已经包含
@@ -47,7 +49,7 @@ import {
 import { STEP_CONTENT } from './src/data/stepContent';
 import { ALLERGY_OPTIONS, PREFERENCE_OPTIONS, FOOD_TYPE_OPTIONS } from './src/data/checkboxOptions';
 import { BUDGET_OPTIONS_FOOD, BUDGET_OPTIONS_DRINK } from './src/constants';
-import type { CompletedAnswers, InputFocus, Answer } from './src/types';
+import type { CompletedAnswers, InputFocus, Answer, AddressSuggestion } from './src/types';
 
 // Styles
 import { globalStyles, rightContentStyles } from './src/styles/globalStyles';
@@ -87,14 +89,47 @@ export default function LemonadeApp() {
   
   // 订单相关状态
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [currentOrderNumber, setCurrentOrderNumber] = useState<string | null>(null);
+  const [currentUserSequenceNumber, setCurrentUserSequenceNumber] = useState<number | null>(null);
   const [isOrderSubmitting, setIsOrderSubmitting] = useState(false);
   const [isSearchingRestaurant, setIsSearchingRestaurant] = useState(false);
 
   // 用户菜单相关状态
   const [showInviteModal, setShowInviteModal] = useState(false);
 
+  // 免单相关状态
+  const [isFreeOrder, setIsFreeOrder] = useState(false);
+  const [showFreeDrinkModal, setShowFreeDrinkModal] = useState(false);
+
   // 重置触发器，用于重置AuthComponent状态
   const [authResetTrigger, setAuthResetTrigger] = useState(0);
+
+  // 免单相关处理函数
+  const handleFreeDrinkClaim = () => {
+    console.log('用户领取免单奶茶');
+    setShowFreeDrinkModal(false);
+    setIsFreeOrder(true);
+    
+    // 自动选择奶茶类型
+    setSelectedFoodType(['drink']);
+    
+    // 跳转到地址填写步骤开始下单流程
+    setCurrentStep(0);
+    setEditingStep(null);
+    setCompletedAnswers({});
+  };
+
+  // 免单流程自动化处理
+  useEffect(() => {
+    if (isFreeOrder && currentStep === 1 && editingStep === null) {
+      // 在食物类型选择步骤自动选择奶茶并进入下一步
+      const timer = setTimeout(() => {
+        handleNext();
+      }, 2200); // 给用户2.2秒看到已自动选择奶茶
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isFreeOrder, currentStep, editingStep]);
 
   // 登出处理函数
   const handleLogout = () => {
@@ -125,6 +160,8 @@ export default function LemonadeApp() {
     setIsAddressConfirmed(false);
     setShowMap(false);
     setCurrentOrderId(null);
+    setCurrentOrderNumber(null);
+    setCurrentUserSequenceNumber(null);
     setIsOrderSubmitting(false);
     setIsSearchingRestaurant(false);
     setInputError('');
@@ -147,7 +184,7 @@ export default function LemonadeApp() {
 
   // 邀请处理函数
   const handleInvite = () => {
-    setShowInviteModal(true);
+    setShowFreeDrinkModal(true);
   };
 
   // Custom hooks
@@ -281,7 +318,7 @@ export default function LemonadeApp() {
       localStorage.setItem('phone_number', result.phoneNumber);
     }
     
-    console.log('鉴权成功:', result);
+    // console.log('鉴权成功:', result);
     
     // 鉴权成功后，添加手机号作为第一个完成的答案
     const phoneAnswer = { type: 'phone', value: result.phoneNumber };
@@ -346,8 +383,24 @@ export default function LemonadeApp() {
     // 鉴权后开始正常流程
     const stepData = STEP_CONTENT[currentStep];
     
+    // 免单模式的特殊文本处理
+    if (isFreeOrder && stepData) {
+      switch (stepData.inputType) {
+        case 'foodType':
+          return {
+            ...stepData,
+            message: "我已经为您自动选择了奶茶 🧋"
+          };
+        case 'payment':
+          return {
+            ...stepData,
+            message: "恭喜！您的免单奶茶已经不远了～"
+          };
+      }
+    }
+    
     // 特殊处理预算步骤，根据食物类型显示不同问题
-    if (stepData && stepData.inputType === 'budget') {
+    if (stepData && stepData.inputType === 'budget' && !isFreeOrder) {
       const isSelectedDrink = selectedFoodType.includes('drink');
       return {
         ...stepData,
@@ -519,17 +572,30 @@ export default function LemonadeApp() {
         if (currentStep === 1) {
           const isSelectedDrink = selectedFoodType.includes('drink');
           if (isSelectedDrink) {
-            // 选择了喝奶茶，跳过忌口(2)和偏好(3)，直接到预算(4)
-            nextStep = 4;
+            if (isFreeOrder) {
+              // 免单模式：直接跳过忌口、偏好、预算，进入支付
+              setBudget('0'); // 自动设置预算为0
+              nextStep = 5; // 直接跳到支付步骤
+            } else {
+              // 选择了喝奶茶，跳过忌口(2)和偏好(3)，直接到预算(4)
+              nextStep = 4;
+            }
           }
           // 选择了吃饭，正常进入忌口步骤(2)
+        }
+        
+        // 如果是免单模式且在预算步骤，自动设置为0并跳到支付
+        if (isFreeOrder && currentStep === 4) {
+          setBudget('0');
+          nextStep = 5;
         }
         
         if (nextStep < STEP_CONTENT.length) {
           setCurrentStep(nextStep);
         } else {
-          // 最后一步完成，创建订单
-          handleCreateOrder();
+          // 已完成所有步骤，但不在这里创建订单
+          // 订单创建将在支付确认时进行
+          console.log('所有表单步骤已完成，等待支付确认');
         }
       }, 200);
     });
@@ -546,7 +612,11 @@ export default function LemonadeApp() {
       address: address,
       allergies: selectedAllergies,
       preferences: selectedPreferences,
-      budget: budget
+      budget: budget,
+      foodType: selectedFoodType, // 添加食物类型信息
+      // 免单相关信息
+      isFreeOrder: isFreeOrder,
+      freeOrderType: isFreeOrder ? 'invite_reward' : undefined
     };
 
     try {
@@ -557,7 +627,9 @@ export default function LemonadeApp() {
       
       if (result.success) {
         setCurrentOrderId(result.order_id || null);
-        console.log('订单创建成功:', result.order_number);
+        setCurrentOrderNumber(result.order_number || null);
+        setCurrentUserSequenceNumber(result.user_sequence_number || null);
+        console.log('订单创建成功:', result.order_number, '用户序号:', result.user_sequence_number);
         
         // 立即提交订单
         handleSubmitOrder(result.order_id!);
@@ -592,7 +664,8 @@ export default function LemonadeApp() {
         
         setTimeout(() => {
           changeEmotion('🍕');
-          typeText('🎊 完美！订单已提交，正在为您匹配餐厅...', TIMING.TYPING_SPEED_FAST);
+          const sequenceText = currentUserSequenceNumber ? `（您的第${currentUserSequenceNumber}单）` : '';
+          typeText(`🎊 完美！订单已提交${sequenceText}，正在为您匹配餐厅...`, TIMING.TYPING_SPEED_FAST);
         }, TIMING.COMPLETION_DELAY);
       } else {
         setInputError(result.message);
@@ -608,7 +681,7 @@ export default function LemonadeApp() {
   };
 
   // 确认下单后开始搜索餐厅
-  const handleConfirmOrder = () => {
+  const handleConfirmOrder = async () => {
     setIsSearchingRestaurant(true);
     changeEmotion('🔍');
     
@@ -623,12 +696,22 @@ export default function LemonadeApp() {
       typeText('正在为你寻找合适外卖...', TIMING.TYPING_SPEED_FAST);
     }, 500);
     
-    // 模拟搜索过程，5秒后显示完成
-    setTimeout(() => {
+    // 创建订单
+    try {
+      await handleCreateOrder();
+      
+      // 模拟搜索过程，5秒后显示完成
+      setTimeout(() => {
+        setIsSearchingRestaurant(false);
+        changeEmotion('🎉');
+        typeText('🎊 完美！已为您找到最合适的餐厅，订单已提交！', TIMING.TYPING_SPEED_FAST);
+      }, 5000);
+    } catch (error) {
       setIsSearchingRestaurant(false);
-      changeEmotion('🎉');
-      typeText('🎊 完美！已为您找到最合适的餐厅，订单已提交！', TIMING.TYPING_SPEED_FAST);
-    }, 5000);
+      changeEmotion('😰');
+      setInputError('订单创建失败，请重试');
+      console.error('确认下单时创建订单失败:', error);
+    }
   };
 
   const handleEditAddress = () => {
@@ -737,12 +820,20 @@ export default function LemonadeApp() {
         // 清空预算，因为食物类型变化后预算范围可能不同
         setBudget('');
         
+        // 重置与支付和订单相关的状态
+        setCurrentOrderId(null);
+        setCurrentOrderNumber(null);
+        setCurrentUserSequenceNumber(null);
+        setIsOrderSubmitting(false);
+        setIsSearchingRestaurant(false);
+        
         if (isSelectedDrink) {
           // 如果改选为喝奶茶，需要清除之后的忌口和偏好答案，并跳转到当前最高有效步骤
           const newCompletedAnswers = { ...completedAnswers };
           delete newCompletedAnswers[2]; // 删除忌口答案
           delete newCompletedAnswers[3]; // 删除偏好答案
           delete newCompletedAnswers[4]; // 删除预算答案
+          delete newCompletedAnswers[5]; // 删除支付答案
           setCompletedAnswers({
             ...newCompletedAnswers,
             [editingStep]: currentAnswer
@@ -760,9 +851,10 @@ export default function LemonadeApp() {
             setCurrentStep(4);
           }
         } else {
-          // 如果改选为吃饭，也要清除预算答案重新填写
+          // 如果改选为吃饭，也要清除预算和支付答案重新填写
           const newCompletedAnswers = { ...completedAnswers };
           delete newCompletedAnswers[4]; // 删除预算答案
+          delete newCompletedAnswers[5]; // 删除支付答案
           setCompletedAnswers({
             ...newCompletedAnswers,
             [editingStep]: currentAnswer
@@ -895,13 +987,19 @@ export default function LemonadeApp() {
     // 手机号输入已移动到AuthComponent
     
     if (stepData.showFoodTypeInput) {
+      // 免单模式下只显示奶茶选项
+      const optionsToShow = isFreeOrder 
+        ? FOOD_TYPE_OPTIONS.filter(option => option.id === 'drink')
+        : FOOD_TYPE_OPTIONS;
+      
       return (
         <ImageCheckbox
-          options={FOOD_TYPE_OPTIONS}
+          options={optionsToShow}
           selectedIds={selectedFoodType}
           onSelectionChange={setSelectedFoodType}
           animationValue={inputSectionAnimation}
           singleSelect={true}
+          disabled={isFreeOrder} // 免单模式下禁用选择
         />
       );
     }
@@ -955,6 +1053,7 @@ export default function LemonadeApp() {
           animationValue={inputSectionAnimation}
           onConfirmOrder={handleConfirmOrder}
           isTyping={isTyping}
+          isFreeOrder={isFreeOrder}
         />
       );
     }
@@ -1036,12 +1135,14 @@ export default function LemonadeApp() {
         />
       )}
       
-      {/* 邀请弹窗 */}
+      {/* 邀请免单弹窗 */}
       {authResult && (
-        <InviteModal
-          isVisible={showInviteModal}
-          onClose={() => setShowInviteModal(false)}
+        <InviteModalWithFreeDrink
+          isVisible={showFreeDrinkModal}
+          onClose={() => setShowFreeDrinkModal(false)}
+          onFreeDrinkClaim={handleFreeDrinkClaim}
           userPhoneNumber={authResult.phoneNumber}
+          userId={authResult.userId!}
         />
       )}
       

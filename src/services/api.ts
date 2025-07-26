@@ -35,12 +35,41 @@ export interface InviteCodeResponse {
   message: string;
   user_id?: string;
   phone_number?: string;
+  user_invite_code?: string;
+}
+
+export interface UserInviteStatsResponse {
+  success: boolean;
+  user_invite_code?: string;
+  current_uses?: number;
+  max_uses?: number;
+  remaining_uses?: number;
+  message?: string;
+  // 免单相关
+  eligible_for_free_drink?: boolean;
+  free_drink_claimed?: boolean;
+  free_drinks_remaining?: number; // 全局免单剩余数量
+}
+
+export interface InviteProgressResponse {
+  success: boolean;
+  invitations?: Array<{
+    phone_number: string;
+    invited_at: string;
+    masked_phone: string;
+  }>;
+  total_invitations?: number;
+  message?: string;
 }
 export interface OrderData {
   address: string;
   allergies: string[];
   preferences: string[];
   budget: string;
+  foodType: string[];
+  // 免单相关
+  isFreeOrder?: boolean;
+  freeOrderType?: 'invite_reward'; // 免单类型：邀请奖励
 }
 
 export interface CreateOrderResponse {
@@ -48,6 +77,7 @@ export interface CreateOrderResponse {
   message: string;
   order_id?: string;
   order_number?: string;
+  user_sequence_number?: number;
 }
 
 export interface SubmitOrderResponse {
@@ -452,4 +482,129 @@ export async function getUserOrders(userId: string): Promise<OrdersResponse> {
     };
   }
 
+}
+
+/**
+ * 获取用户邀请统计信息
+ */
+export async function getUserInviteStats(userId: string): Promise<UserInviteStatsResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/get-user-invite-stats?user_id=${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || '获取邀请统计失败');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('获取邀请统计错误:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : '网络错误，请重试'
+    };
+  }
+}
+
+/**
+ * 获取用户邀请进度
+ */
+export async function getInviteProgress(userId: string): Promise<InviteProgressResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/get-invite-progress?user_id=${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || '获取邀请进度失败');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('获取邀请进度错误:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : '网络错误，请重试'
+    };
+  }
+}
+
+/**
+ * 免单相关接口
+ */
+
+export interface FreeDrinkResponse {
+  success: boolean;
+  message: string;
+  free_drinks_remaining?: number;
+}
+
+/**
+ * 领取免单奶茶资格
+ */
+export async function claimFreeDrink(userId: string): Promise<FreeDrinkResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/claim-free-drink`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || '领取免单失败');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('领取免单错误:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : '网络错误，请重试'
+    };
+  }
+}
+
+/**
+ * 获取免单剩余数量
+ */
+export async function getFreeDrinksRemaining(): Promise<FreeDrinkResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/free-drinks-remaining`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || '获取免单信息失败');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('获取免单信息错误:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : '网络错误，请重试'
+    };
+  }
 }

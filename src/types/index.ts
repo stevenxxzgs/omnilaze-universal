@@ -1,5 +1,5 @@
 export interface Answer {
-  type: 'address' | 'phone' | 'budget' | 'allergy' | 'preference' | 'foodType';
+  type: 'address' | 'phone' | 'budget' | 'allergy' | 'preference' | 'foodType' | 'payment';
   value: string;
 }
 
@@ -45,4 +45,19 @@ export interface ThemeColor {
 export interface ValidationResult {
   isValid: boolean;
   errorMessage?: string;
+}
+
+export interface AddressSuggestion {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
+}
+
+export interface AddressSearchResponse {
+  success: boolean;
+  message: string;
+  predictions: AddressSuggestion[];
 }

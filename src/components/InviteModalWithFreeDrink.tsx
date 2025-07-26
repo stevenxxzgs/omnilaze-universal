@@ -1,19 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, ScrollView, Animated, Easing } from 'react-native';
 import { SimpleIcon } from './SimpleIcon';
 import { COLORS } from '../constants';
-import { getUserInviteStats, getInviteProgress, UserInviteStatsResponse, InviteProgressResponse } from '../services/api';
+import { 
+  getUserInviteStats, 
+  getInviteProgress, 
+  getFreeDrinksRemaining,
+  claimFreeDrink,
+  UserInviteStatsResponse, 
+  InviteProgressResponse 
+} from '../services/api';
 
-interface InviteModalProps {
+interface InviteModalWithFreeDrinkProps {
   isVisible: boolean;
   onClose: () => void;
+  onFreeDrinkClaim: () => void; // 点击免单按钮的回调
   userPhoneNumber: string;
-  userId: string; // 添加userId prop
+  userId: string;
 }
 
-export const InviteModal: React.FC<InviteModalProps> = ({
+export const InviteModalWithFreeDrink: React.FC<InviteModalWithFreeDrinkProps> = ({
   isVisible,
   onClose,
+  onFreeDrinkClaim,
   userPhoneNumber,
   userId,
 }) => {
@@ -21,20 +30,47 @@ export const InviteModal: React.FC<InviteModalProps> = ({
   const [inviteStats, setInviteStats] = useState<UserInviteStatsResponse | null>(null);
   const [inviteProgress, setInviteProgress] = useState<InviteProgressResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [freeDrinksRemaining, setFreeDrinksRemaining] = useState<number>(100);
+  
+  // 动画相关状态
+  const [showFreeDrinkOffer, setShowFreeDrinkOffer] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const progressOpacity = useRef(new Animated.Value(1)).current;
+  const freeDrinkOpacity = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
-  // 获取用户邀请数据
+  // 获取数据
   useEffect(() => {
     if (isVisible && userId) {
-      loadInviteData();
+      loadAllData();
     }
   }, [isVisible, userId]);
 
-  const loadInviteData = async () => {
+  // 检查是否应该显示免单动画
+  useEffect(() => {
+    if (inviteStats && !loading) {
+      // 检查免单资格：邀请满3人 + 未领取过 + 全局还有名额
+      const isEligible = inviteStats.eligible_for_free_drink && 
+                        !inviteStats.free_drink_claimed && 
+                        freeDrinksRemaining > 0;
+      
+      if (isEligible && !showFreeDrinkOffer) {
+        // 延迟显示动画，让用户先看到3/3的成就感
+        setTimeout(() => {
+          triggerFreeDrinkAnimation();
+        }, 1000);
+      }
+    }
+  }, [inviteStats, loading, freeDrinksRemaining]);
+
+  const loadAllData = async () => {
     setLoading(true);
     try {
-      const [statsResponse, progressResponse] = await Promise.all([
+      const [statsResponse, progressResponse, freeDrinksResponse] = await Promise.all([
         getUserInviteStats(userId),
-        getInviteProgress(userId)
+        getInviteProgress(userId),
+        getFreeDrinksRemaining()
       ]);
       
       if (statsResponse.success) {
@@ -44,16 +80,64 @@ export const InviteModal: React.FC<InviteModalProps> = ({
       if (progressResponse.success) {
         setInviteProgress(progressResponse);
       }
+
+      if (freeDrinksResponse.success && freeDrinksResponse.free_drinks_remaining !== undefined) {
+        setFreeDrinksRemaining(freeDrinksResponse.free_drinks_remaining);
+      }
     } catch (error) {
-      console.error('加载邀请数据失败:', error);
+      console.error('加载数据失败:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // 生成邀请码（基于手机号的简单算法）- 保留作为fallback
+  const triggerFreeDrinkAnimation = () => {
+    setShowFreeDrinkOffer(true);
+    
+    // 第一阶段：渐隐进度条
+    Animated.timing(progressOpacity, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: true,
+    }).start(() => {
+      // 第二阶段：渐显免单内容
+      Animated.parallel([
+        Animated.timing(freeDrinkOpacity, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        })
+      ]).start();
+    });
+  };
+
+  const handleFreeDrinkClaim = async () => {
+    try {
+      const response = await claimFreeDrink(userId);
+      if (response.success) {
+        onFreeDrinkClaim();
+        onClose();
+      }
+    } catch (error) {
+      console.error('领取免单失败:', error);
+    }
+  };
+
+  // 生成邀请码（fallback）
   const generateInviteCode = (phoneNumber: string): string => {
-    // 简单的邀请码生成逻辑，实际项目中应该从后端获取
     const hash = phoneNumber.split('').reduce((a, b) => {
       a = ((a << 5) - a) + b.charCodeAt(0);
       return a & a;
@@ -64,15 +148,13 @@ export const InviteModal: React.FC<InviteModalProps> = ({
   const inviteCode = inviteStats?.user_invite_code || generateInviteCode(userPhoneNumber);
   const inviteText = `我在用懒得点外卖，体验非常棒！使用我的邀请码 ${inviteCode} 到order.omnilaze.co注册，一起享受智能点餐服务吧！🎉`;
 
-  // Web环境下使用navigator.clipboard，React Native使用不同的API
+  // 复制功能
   const copyToClipboard = async (text: string) => {
     try {
       if (Platform.OS === 'web') {
-        // Web环境
         if (navigator.clipboard) {
           await navigator.clipboard.writeText(text);
         } else {
-          // 降级方案：创建临时输入框
           const textArea = document.createElement('textarea');
           textArea.value = text;
           document.body.appendChild(textArea);
@@ -80,15 +162,11 @@ export const InviteModal: React.FC<InviteModalProps> = ({
           document.execCommand('copy');
           document.body.removeChild(textArea);
         }
-      } else {
-        // React Native环境 - 这里可以使用Clipboard
-        // await Clipboard.setString(text);
       }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error('复制失败:', error);
-      // 即使复制失败也显示提示
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -96,6 +174,10 @@ export const InviteModal: React.FC<InviteModalProps> = ({
 
   const handleCopyInviteCode = () => copyToClipboard(inviteCode);
   const handleCopyInviteText = () => copyToClipboard(inviteText);
+
+  const currentUses = inviteStats?.current_uses || 0;
+  const maxUses = inviteStats?.max_uses || 3;
+  const isCompleted = currentUses >= maxUses;
 
   return (
     <Modal
@@ -154,25 +236,93 @@ export const InviteModal: React.FC<InviteModalProps> = ({
                     </TouchableOpacity>
                   </View>
                   
-                  {/* 邀请统计 */}
-                  {inviteStats && (
-                    <View style={styles.statsContainer}>
-                      <Text style={styles.statsText}>
-                        已邀请 {inviteStats.current_uses || 0}/{inviteStats.max_uses || 3} 人
-                      </Text>
-                      <View style={styles.progressBar}>
-                        <View 
-                          style={[
-                            styles.progressFill, 
-                            { width: `${((inviteStats.current_uses || 0) / (inviteStats.max_uses || 3)) * 100}%` }
-                          ]} 
-                        />
-                      </View>
-                    </View>
-                  )}
+                  {/* 邀请进度区域 */}
+                  <View style={styles.progressSection}>
+                    {!showFreeDrinkOffer ? (
+                      // 常规进度显示
+                      <Animated.View 
+                        style={[
+                          styles.statsContainer,
+                          { opacity: progressOpacity }
+                        ]}
+                      >
+                        <Text style={styles.statsText}>
+                          已邀请 {currentUses}/{maxUses} 人
+                        </Text>
+                        <View style={styles.progressBar}>
+                          <View 
+                            style={[
+                              styles.progressFill, 
+                              { 
+                                width: `${(currentUses / maxUses) * 100}%`,
+                                backgroundColor: isCompleted ? '#10b981' : COLORS.PRIMARY
+                              }
+                            ]} 
+                          />
+                        </View>
+                        {isCompleted && (
+                          <>
+                            <Text style={styles.completedText}>
+                              🎉 恭喜完成邀请任务！
+                            </Text>
+                            {/* 名额用完提示 */}
+                            {(inviteStats?.free_drink_claimed || freeDrinksRemaining <= 0) && (
+                              <Text style={styles.quotaEndedText}>
+                                {inviteStats?.free_drink_claimed 
+                                  ? "您已领取过免单奶茶" 
+                                  : "免单名额已用完，下次要更快哦！"}
+                              </Text>
+                            )}
+                          </>
+                        )}
+                      </Animated.View>
+                    ) : (
+                      // 免单奖励显示
+                      <Animated.View 
+                        style={[
+                          styles.freeDrinkContainer,
+                          {
+                            opacity: freeDrinkOpacity,
+                            transform: [
+                              { scale: scaleAnim },
+                              { 
+                                translateY: slideAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [20, 0]
+                                })
+                              }
+                            ]
+                          }
+                        ]}
+                      >
+                        <Text style={styles.freeDrinkTitle}>
+                          恭喜您获得免单奶茶！
+                        </Text>
+                        <Text style={styles.freeDrinkSubtitle}>
+                          成功邀请3位好友的奖励
+                        </Text>
+                        <Text style={styles.freeDrinkQuota}>
+                          仅限前{freeDrinksRemaining}名，立即领取！
+                        </Text>
+                        
+                        <View style={styles.drinkActionRow}>
+                          <Text style={styles.drinkEmoji}>🧋</Text>
+                          <TouchableOpacity
+                            style={styles.claimButton}
+                            onPress={handleFreeDrinkClaim}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.claimButtonText}>
+                              立即免单
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </Animated.View>
+                    )}
+                  </View>
                 </View>
 
-                {/* 邀请进度 */}
+                {/* 邀请记录 */}
                 {inviteProgress && inviteProgress.invitations && inviteProgress.invitations.length > 0 && (
                   <View style={styles.inviteProgressContainer}>
                     <Text style={styles.progressLabel}>邀请记录</Text>
@@ -307,8 +457,12 @@ const styles = StyleSheet.create({
   copyButton: {
     padding: 8,
   },
-  statsContainer: {
+  progressSection: {
     marginTop: 12,
+    minHeight: 40, // 减小最小高度，减少不必要的间距
+  },
+  statsContainer: {
+    marginBottom: 8,
   },
   statsText: {
     fontSize: 14,
@@ -326,6 +480,74 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.PRIMARY,
     borderRadius: 3,
   },
+  completedText: {
+    fontSize: 14,
+    color: '#10b981',
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  quotaEndedText: {
+    fontSize: 12,
+    color: '#f59e0b',
+    fontWeight: '500',
+    marginTop: 6,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  // 免单相关样式
+  freeDrinkContainer: {
+    alignItems: 'center',
+    backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 4, // 减少顶部边距
+  },
+  freeDrinkTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.WHITE,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  freeDrinkSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  freeDrinkQuota: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  drinkActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1.6, // 缩小到原来的1/10 (16 → 1.6)
+  },
+  drinkEmoji: {
+    fontSize: 40,
+  },
+  claimButton: {
+    backgroundColor: '#ff6b6b',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  claimButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.WHITE,
+  },
+  // 其他样式保持不变
   inviteProgressContainer: {
     marginBottom: 24,
   },

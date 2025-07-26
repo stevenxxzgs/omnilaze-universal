@@ -17,6 +17,7 @@ interface ImageCheckboxProps {
   animationValue?: Animated.Value;
   singleSelect?: boolean; // 新增：是否单选模式
   onOtherTextChange?: (text: string) => void; // 新增：其他输入框文本变化回调
+  disabled?: boolean; // 新增：是否禁用选择
 }
 
 export const ImageCheckbox: React.FC<ImageCheckboxProps> = ({
@@ -26,6 +27,7 @@ export const ImageCheckbox: React.FC<ImageCheckboxProps> = ({
   animationValue,
   singleSelect = false, // 默认多选
   onOtherTextChange,
+  disabled = false, // 默认不禁用
 }) => {
   const [shouldRender, setShouldRender] = useState(!animationValue);
   const [otherText, setOtherText] = useState('');
@@ -46,6 +48,9 @@ export const ImageCheckbox: React.FC<ImageCheckboxProps> = ({
   }, [animationValue]);
 
   const toggleOption = (optionId: string) => {
+    // 如果组件被禁用，不允许切换选择
+    if (disabled) return;
+    
     const isSelected = selectedIds.includes(optionId);
     const isOtherOption = optionId.includes('other');
     let newSelection: string[];
@@ -158,10 +163,12 @@ export const ImageCheckbox: React.FC<ImageCheckboxProps> = ({
               key={option.id}
               style={[
                 styles.optionCard,
-                isSelected && styles.selectedCard
+                isSelected && styles.selectedCard,
+                disabled && styles.disabledCard
               ]}
               onPress={() => toggleOption(option.id)}
-              activeOpacity={0.7}
+              activeOpacity={disabled ? 1 : 0.7}
+              disabled={disabled}
             >
               <View style={styles.imageContainer}>
                 <Image 
@@ -300,6 +307,10 @@ const styles = StyleSheet.create({
   checkedBox: {
     backgroundColor: COLORS.PRIMARY,
     borderColor: COLORS.PRIMARY,
+  },
+  disabledCard: {
+    opacity: 0.8,
+    backgroundColor: '#f8f9fa',
   },
   otherInputContainer: {
     marginTop: 16,

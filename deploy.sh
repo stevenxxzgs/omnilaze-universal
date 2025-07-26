@@ -13,58 +13,48 @@ fi
 if ! wrangler whoami &> /dev/null; then
     echo "🔐 请先登录 Cloudflare："
     wrangler login
+    if [ $? -ne 0 ]; then
+        echo "❌ 登录失败"
+        exit 1
+    fi
 fi
-
-echo "📦 正在创建 D1 数据库..."
-# 创建 D1 数据库
-DB_OUTPUT=$(wrangler d1 create omnilaze-orders)
-DB_ID=$(echo "$DB_OUTPUT" | grep "database_id" | cut -d'"' -f4)
-
-if [ -z "$DB_ID" ]; then
-    echo "❌ 创建数据库失败"
-    exit 1
-fi
-
-echo "✅ 数据库创建成功，ID: $DB_ID"
-
-echo "📊 正在创建 KV 命名空间..."
-# 创建 KV 命名空间
-KV_OUTPUT=$(wrangler kv:namespace create VERIFICATION_KV)
-KV_ID=$(echo "$KV_OUTPUT" | grep "id" | cut -d'"' -f4)
-
-if [ -z "$KV_ID" ]; then
-    echo "❌ 创建 KV 命名空间失败"
-    exit 1
-fi
-
-echo "✅ KV 命名空间创建成功，ID: $KV_ID"
-
-echo "🔧 正在更新 wrangler.toml 配置..."
-# 更新 wrangler.toml 中的 database_id 和 kv id
-sed -i.bak "s/database_id = \"your-database-id-here\"/database_id = \"$DB_ID\"/" wrangler.toml
-sed -i.bak "s/id = \"your-kv-namespace-id-here\"/id = \"$KV_ID\"/" wrangler.toml
 
 echo "📋 正在执行数据库迁移..."
-# 执行数据库迁移
-wrangler d1 execute omnilaze-orders --file=./migrations/001_initial.sql
+# 执行数据库迁移（假设数据库已存在）
+echo "执行初始数据库迁移..."
+wrangler d1 execute omnilaze-orders --file=./migrations/001_initial.sql --remote
+
+echo "执行邀请系统迁移..."
+wrangler d1 execute omnilaze-orders --file=./migrations/002_invite_system.sql --remote
+
+if [ $? -ne 0 ]; then
+    echo "⚠️ 数据库迁移可能已执行过，继续部署..."
+fi
 
 echo "🌐 正在部署 Worker..."
 # 部署 Worker
 wrangler deploy
 
+if [ $? -ne 0 ]; then
+    echo "❌ Worker 部署失败"
+    exit 1
+fi
+
 echo ""
-echo "🎉 部署完成！"
+echo "🎉 后端部署完成！"
 echo ""
-echo "📝 部署信息："
-echo "- D1 数据库 ID: $DB_ID"
-echo "- KV 命名空间 ID: $KV_ID"
-echo ""
+
+# 获取 Worker URL
+WORKER_URL=$(wrangler whoami | grep "Account ID" -A 10 | grep -o "https://.*workers\.dev" | head -1)
+if [ -z "$WORKER_URL" ]; then
+    WORKER_URL="https://omnilaze-universal-api.steven-wu.workers.dev"
+fi
+
 echo "🔗 你的 API 地址："
-WORKER_URL=$(wrangler deployment list | grep "https://" | head -1 | awk '{print $3}')
 echo "$WORKER_URL"
-echo ""
-echo "⚠️  请更新前端的 API URL 配置："
-echo "REACT_APP_API_URL=$WORKER_URL"
 echo ""
 echo "🧪 测试你的 API："
 echo "curl $WORKER_URL/health"
+echo ""
+echo "📝 接下来部署前端："
+echo "./deploy-frontend.sh"
