@@ -227,7 +227,7 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
           <TextInput
             style={[
               inputStyles.simpleTextInput,
-              { outline: 'none', outlineWidth: 0 }
+              { outlineWidth: 0 }
             ] as any}
             placeholder={placeholder}
             value={value}

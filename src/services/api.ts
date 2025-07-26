@@ -67,21 +67,37 @@ export interface OrdersResponse {
   count: number;
 }
 
+// 地址搜索相关接口
+export interface AddressSuggestion {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
+}
+
+export interface AddressSearchResponse {
+  success: boolean;
+  message: string;
+  predictions: AddressSuggestion[];
+}
+
 // API 基础 URL 配置
 const getApiBaseUrl = () => {
   // 生产环境：优先使用自定义域名
   if (process.env.NODE_ENV === 'production') {
     return process.env.REACT_APP_API_URL || 'https://api.omnilaze.co';
   }
-  
+
   // 开发环境：检查本地服务器或使用线上地址
   const localUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-  
+
   // 如果设置了生产 URL 作为开发环境的备选，使用它
   if (localUrl.startsWith('https://') && (localUrl.includes('workers.dev') || localUrl.includes('omnilaze.co'))) {
     return localUrl;
   }
-  
+
   return localUrl;
 };
 
@@ -202,7 +218,7 @@ export async function searchAddresses(query: string): Promise<AddressSearchRespo
     // 输入验证：至少4个汉字
     const trimmedQuery = query.trim();
     const chineseCharCount = (trimmedQuery.match(/[\u4e00-\u9fff]/g) || []).length;
-    
+
     if (!trimmedQuery || chineseCharCount < 4) {
       return {
         success: true,
@@ -234,17 +250,26 @@ export async function searchAddresses(query: string): Promise<AddressSearchRespo
       return getFallbackResults(keywords);
     }
 
-    const response = await fetch(`https://restapi.amap.com/v3/assistant/inputtips?key=${AMAP_KEY}&keywords=${encodeURIComponent(keywords)}`);
+    const apiUrl = `https://restapi.amap.com/v3/assistant/inputtips?key=${AMAP_KEY}&keywords=${encodeURIComponent(keywords)}`;
+    console.log('调用高德API:', apiUrl);
+    
+    const response = await fetch(apiUrl);
 
     if (!response.ok) {
+      console.error(`HTTP错误 ${response.status}: ${response.statusText}`);
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('高德API响应:', data);
 
     // 检查高德API返回状态
     if (data.status !== '1') {
-      console.error('高德API错误:', data.info);
+      console.error('高德API错误:', {
+        status: data.status,
+        info: data.info,
+        infocode: data.infocode
+      });
       return getFallbackResults(keywords);
     }
 
@@ -316,13 +341,13 @@ function formatSecondaryText(tip: any): string {
 }
 
 /**
- * 降级处理：API失败时的模拟数据
+ * 获取降级结果（当API失败时返回空结果）
  */
 function getFallbackResults(keywords: string): AddressSearchResponse {
-  // 不再提供模拟的"街道、大道"数据，直接返回空结果
+  console.warn('地址搜索API失败，返回空结果');
   return {
-    success: true,
-    message: '搜索服务暂时不可用，请稍后重试',
+    success: false,
+    message: '地址搜索服务暂时不可用，请稍后重试',
     predictions: []
   };
 }
