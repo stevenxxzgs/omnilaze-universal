@@ -54,7 +54,7 @@ export interface OrdersResponse {
 
 // API 基础 URL 配置
 const getApiBaseUrl = () => {
-  // 生产环境：优先使用自定义域名，fallback到workers.dev
+  // 生产环境：优先使用自定义域名
   if (process.env.NODE_ENV === 'production') {
     return process.env.REACT_APP_API_URL || 'https://api.omnilaze.co';
   }
@@ -71,40 +71,13 @@ const getApiBaseUrl = () => {
 };
 
 const API_BASE_URL = getApiBaseUrl();
-const FALLBACK_API_URL = 'https://omnilaze-universal-api.stevenxxzg.workers.dev';
-
-/**
- * 带有fallback的fetch函数
- */
-async function fetchWithFallback(endpoint: string, options: RequestInit): Promise<Response> {
-  // 首先尝试主API
-  try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-    return response;
-  } catch (error) {
-    console.warn(`主API ${API_BASE_URL} 连接失败，尝试fallback:`, error);
-    
-    // 如果主API失败且当前不是fallback URL，尝试fallback
-    if (API_BASE_URL !== FALLBACK_API_URL) {
-      try {
-        const response = await fetch(`${FALLBACK_API_URL}${endpoint}`, options);
-        return response;
-      } catch (fallbackError) {
-        console.error(`Fallback API ${FALLBACK_API_URL} 也失败:`, fallbackError);
-        throw fallbackError;
-      }
-    } else {
-      throw error;
-    }
-  }
-}
 
 /**
  * 发送手机验证码
  */
 export async function sendVerificationCode(phoneNumber: string): Promise<ApiResponse> {
   try {
-    const response = await fetchWithFallback('/send-verification-code', {
+    const response = await fetch(`${API_BASE_URL}/send-verification-code`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -135,7 +108,7 @@ export async function sendVerificationCode(phoneNumber: string): Promise<ApiResp
  */
 export async function verifyCodeAndLogin(phoneNumber: string, code: string): Promise<VerificationResponse> {
   try {
-    const response = await fetchWithFallback('/login-with-phone', {
+    const response = await fetch(`${API_BASE_URL}/login-with-phone`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -167,7 +140,7 @@ export async function verifyCodeAndLogin(phoneNumber: string, code: string): Pro
  */
 export async function verifyInviteCodeAndCreateUser(phoneNumber: string, inviteCode: string): Promise<InviteCodeResponse> {
   try {
-    const response = await fetchWithFallback('/verify-invite-code', {
+    const response = await fetch(`${API_BASE_URL}/verify-invite-code`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -199,7 +172,7 @@ export async function verifyInviteCodeAndCreateUser(phoneNumber: string, inviteC
  */
 export async function createOrder(userId: string, phoneNumber: string, formData: OrderData): Promise<CreateOrderResponse> {
   try {
-    const response = await fetchWithFallback('/create-order', {
+    const response = await fetch(`${API_BASE_URL}/create-order`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -232,7 +205,7 @@ export async function createOrder(userId: string, phoneNumber: string, formData:
  */
 export async function submitOrder(orderId: string): Promise<SubmitOrderResponse> {
   try {
-    const response = await fetchWithFallback('/submit-order', {
+    const response = await fetch(`${API_BASE_URL}/submit-order`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -263,7 +236,7 @@ export async function submitOrder(orderId: string): Promise<SubmitOrderResponse>
  */
 export async function submitOrderFeedback(orderId: string, rating: number, feedback: string): Promise<FeedbackResponse> {
   try {
-    const response = await fetchWithFallback('/order-feedback', {
+    const response = await fetch(`${API_BASE_URL}/order-feedback`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -296,7 +269,7 @@ export async function submitOrderFeedback(orderId: string, rating: number, feedb
  */
 export async function getUserOrders(userId: string): Promise<OrdersResponse> {
   try {
-    const response = await fetchWithFallback(`/orders/${userId}`, {
+    const response = await fetch(`${API_BASE_URL}/orders/${userId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
